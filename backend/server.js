@@ -25,6 +25,7 @@ import organizationRankRoute from './routes/organizationrank.js';
 import TransportEntryRouter from './routes/TransportEntry.js';
 import TransportQuery from './routes/TransportQuery.js';
 import oauthRoute from './routes/oauth.js';
+import dbconnection from './db/db.js';
 
 dotenv.config();
 
@@ -87,13 +88,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const PORT = process.env.PORT || 5000;
 
-const URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/greencity_project";
-mongoose.connect(URI)
-.then(() => console.log("Connected to MongoDB"))
-.catch((error) => {
-  console.error("Error connecting to MongoDB:", error.message);
-  process.exit(1);
-});
+  dbconnection()
 
 // Request logging middleware (for debugging)
 app.use((req, res, next) => {
@@ -158,6 +153,9 @@ app.use((err, req, res, next) => {
     error: err.message || 'Internal server error'
   });
 });
+app.use("/",(req,res)=>{
+  res.send(`<H1> Backend is running </H1>`)
+})
 
 app.listen(PORT, () => {
   console.log(`✅ Server started on port ${PORT}`);
