@@ -119,31 +119,6 @@ app.use((err, req, res, next) => {
 });
 
 // Export the Express app for Vercel
-export default async (req, res) => {
-  try {
-    // Connect to MongoDB if not already connected
-    if (mongoose.connection.readyState === 0) {
-      await dbconnection();
-    }
-    // Forward to Express
-    return app(req, res);
-  } catch (error) {
-    console.error('Server initialization error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
-  }
-};
 
-// Start server locally if not in Vercel environment
-if (process.env.VERCEL !== '1') {
-  const PORT = process.env.PORT || 5000;
-  app.listen(PORT, async () => {
-    try {
-      await dbconnection();
-      console.log(`✅ Server started on port ${PORT}`);
-      console.log(`📡 Health check: http://localhost:${PORT}/health`);
-    } catch (error) {
-      console.error('Failed to start server:', error);
-      process.exit(1);
-    }
-  });
-}
+
+dbconnection();

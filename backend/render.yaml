@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: greencity-backend
+    env: node
+    buildCommand: cd backend && yarn
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        fromDatabase:
+          name: greencity-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
