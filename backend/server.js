@@ -50,17 +50,15 @@ if (!fs.existsSync(uploadsDir)) {
   console.log('Created uploads directory');
 }
 
+// ... (keep existing imports)
+
 const app = express();
 
 // Apply security middleware
 app.use(securityHeaders);
 app.use(mongoSanitizeMiddleware);
 app.use(sanitizeInput);
-
-// CORS configuration
 app.use(cors(corsOptions));
-
-// Apply rate limiting
 app.use(rateLimiter);
 
 // Session configuration for OAuth
@@ -85,20 +83,7 @@ app.use(express.urlencoded({ extended: true }));
 // Serve uploaded files statically
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-
-const PORT = process.env.PORT || 5000;
-
-  dbconnection()
-
-// Request logging middleware (for debugging)
-app.use((req, res, next) => {
-  if (req.path.startsWith('/api')) {
-    console.log(`📥 ${req.method} ${req.path}`, req.body ? 'with body' : '');
-  }
-  next();
-});
-
-// Health check endpoint (before rate limiting)
+// Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'ok',
@@ -107,13 +92,9 @@ app.get('/health', (req, res) => {
   });
 });
 
-// API routes with auth rate limiting
-// Mount auth routes (signup, login, verification) at /api/auth
+// API routes
 app.use('/api/auth', authRateLimiter, userRoute);
-// Mount OAuth routes at /api/auth (they use different paths like /google, /github)
 app.use('/api/auth', authRateLimiter, oauthRoute);
-
-// Other API routes
 app.use('/api/issue', issueRoute);
 app.use('/api/organization', organizationRoute);
 app.use('/api/issuesolved', issueSolvedRoute);
@@ -122,26 +103,7 @@ app.use('/api/organizationrank', organizationRankRoute);
 app.use('/api/entry', TransportEntryRouter);
 app.use('/api/query', TransportQuery);
 
-// Debug: Log all registered routes
-console.log('\n📋 Registered API Routes:');
-console.log('  POST /api/auth/signup-user');
-console.log('  POST /api/auth/login-user');
-console.log('  POST /api/auth/signup-admin');
-console.log('  POST /api/auth/login-admin');
-console.log('  POST /api/auth/login-org (legacy)');
-console.log('  POST /api/auth/verify-email');
-console.log('  POST /api/auth/resend-verification');
-console.log('  GET  /api/auth/profile');
-console.log('  GET  /api/auth/google');
-console.log('  GET  /api/auth/github');
-console.log('  POST /api/organization/signup');
-console.log('  POST /api/organization/login');
-console.log('  POST /api/organization/verify-email');
-console.log('  POST /api/organization/resend-verification');
-console.log('  GET  /api/organization/profile');
-console.log('');
-
-// 404 handler for undefined routes
+// 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
@@ -150,15 +112,38 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
   res.status(err.status || 500).json({
-    error: err.message || 'Internal server error'
+    error: process.env.NODE_ENV === 'production' 
+      ? 'Internal server error' 
+      : err.message
   });
 });
-app.use("/",(req,res)=>{
-  res.send(`<H1> Backend is running </H1>`)
-})
 
-app.listen(PORT, () => {
-  console.log(`✅ Server started on port ${PORT}`);
-  console.log(`📡 Health check: http://localhost:${PORT}/health`);
-  console.log(`🔗 API base: http://localhost:${PORT}/api`);
-});
+// Export the Express app for Vercel
+export default async (req, res) => {
+  try {
+    // Connect to MongoDB if not already connected
+    if (mongoose.connection.readyState === 0) {
+      await dbconnection();
+    }
+    // Forward to Express
+    return app(req, res);
+  } catch (error) {
+    console.error('Server initialization error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// Start server locally if not in Vercel environment
+if (process.env.VERCEL !== '1') {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, async () => {
+    try {
+      await dbconnection();
+      console.log(`✅ Server started on port ${PORT}`);
+      console.log(`📡 Health check: http://localhost:${PORT}/health`);
+    } catch (error) {
+      console.error('Failed to start server:', error);
+      process.exit(1);
+    }
+  });
+}
