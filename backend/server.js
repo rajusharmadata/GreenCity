@@ -7,14 +7,14 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import session from 'express-session';
 import passport from './config/passport.js';
-import { 
-  rateLimiter, 
-  authRateLimiter, 
-  securityHeaders, 
-  sanitizeInput, 
-  mongoSanitizeMiddleware, 
+import {
+  rateLimiter,
+  authRateLimiter,
+  securityHeaders,
+  sanitizeInput,
+  mongoSanitizeMiddleware,
   corsOptions,
-  validateEnvironment 
+  validateEnvironment
 } from './config/security.js';
 import userRoute from './routes/auth.js';
 import issueRoute from './routes/issue.js';
@@ -28,16 +28,16 @@ import oauthRoute from './routes/oauth.js';
 
 dotenv.config();
 
-// Validate environment variables (with defaults for development)
-try {
-  validateEnvironment();
-} catch (error) {
-  console.error('Environment validation error:', error.message);
-  // In development, continue with warnings
-  if (process.env.NODE_ENV === 'production') {
-    process.exit(1);
-  }
-}
+// // Validate environment variables (with defaults for development)
+// try {
+//   validateEnvironment();
+// } catch (error) {
+//   console.error('Environment validation error:', error.message);
+//   // In development, continue with warnings
+//   if (process.env.NODE_ENV === 'production') {
+//     process.exit(1);
+//   }
+// }
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -105,8 +105,8 @@ app.use((req, res, next) => {
 
 // Health check endpoint (before rate limiting)
 app.get('/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'ok', 
+  res.status(200).json({
+    status: 'ok',
     message: 'Server is running',
     timestamp: new Date().toISOString()
   });
@@ -154,8 +154,8 @@ app.use((req, res) => {
 // Error handler
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
-  res.status(err.status || 500).json({ 
-    error: err.message || 'Internal server error' 
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal server error'
   });
 });
 
