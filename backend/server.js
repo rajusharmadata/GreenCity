@@ -1,5 +1,5 @@
 import express from 'express';
-import mongoose from 'mongoose';
+
 import dotenv from 'dotenv';
 import cors from 'cors';
 import path from 'path';
@@ -27,7 +27,9 @@ import TransportQuery from './routes/TransportQuery.js';
 import oauthRoute from './routes/oauth.js';
 import dbconnection from './db/db.js';
 
-dotenv.config();
+dotenv.config({
+  path: ".env"
+});
 
 // // Validate environment variables (with defaults for development)
 // try {
@@ -112,13 +114,21 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
   res.status(err.status || 500).json({
-    error: process.env.NODE_ENV === 'production' 
-      ? 'Internal server error' 
+    error: process.env.NODE_ENV === 'production'
+      ? 'Internal server error'
       : err.message
   });
 });
 
 // Export the Express app for Vercel
 
-
+// Start server - listen on all interfaces (0.0.0.0) for mobile device access
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server is running on http://0.0.0.0:${PORT}`);
+  console.log(`Server is accessible at http://localhost:${PORT}`);
+  console.log(`For mobile devices, use your computer's IP address: http://YOUR_IP:${PORT}`);
+});
 dbconnection();
+
+export default app;
