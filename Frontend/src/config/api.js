@@ -32,28 +32,28 @@ export const API_ENDPOINTS = {
   ADMIN_LOGIN: `${API_ROOT}/auth/login-admin`,
   ORG_SIGNUP: `${API_ROOT}/organization/signup`,
   ORG_LOGIN: `${API_ROOT}/organization/login`,
-  
+
   // Profile endpoints
   USER_PROFILE: `${API_ROOT}/auth/profile`,
   ORG_PROFILE: `${API_ROOT}/organization/profile`,
-  
+
   // Email verification endpoints
   VERIFY_EMAIL: `${API_ROOT}/auth/verify-email`,
   RESEND_VERIFICATION: `${API_ROOT}/auth/resend-verification`,
   ORG_VERIFY_EMAIL: `${API_ROOT}/organization/verify-email`,
   ORG_RESEND_VERIFICATION: `${API_ROOT}/organization/resend-verification`,
-  
+
   // Issue endpoints
   REPORT_ISSUE: `${API_ROOT}/issue/issue`,
   GET_ALL_ISSUES: `${API_ROOT}/issue/issues`,
   GET_USER_ISSUES: `${API_ROOT}/issue/issues/user`,
-  
+
   // Transport endpoints
   TRANSPORT_ENTRY: `${API_ROOT}/entry/submit`,
   GET_ALL_TRANSPORTS: `${API_ROOT}/entry/all`,
   GET_ORG_TRANSPORTS: `${API_ROOT}/entry/organization`,
   TRANSPORT_QUERY: `${API_ROOT}/query/transport`,
-  
+
   // Dashboard endpoints
   USER_RANK: `${API_ROOT}/userrank/rankings`,
   ORG_RANK: `${API_ROOT}/organizationrank/rankings`,
