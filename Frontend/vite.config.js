@@ -9,10 +9,10 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: 'https://greencity-7lnb.onrender.com',
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path, // Keep the /api prefix
+        rewrite: path => path, // Keep the /api prefix
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, _res) => {
             console.log('proxy error', err);
@@ -21,7 +21,7 @@ export default defineConfig({
             console.log('Proxying:', req.method, req.url, '->', proxyReq.path);
           });
         },
-      }
-    }
-  }
+      },
+    },
+  },
 });
