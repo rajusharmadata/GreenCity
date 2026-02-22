@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
-import User from './models/auth.js';
+import User from './models/User.js';
 import Organization from './models/organization.js';
 import Issue from './models/issue.js';
 
@@ -191,9 +191,9 @@ const seedData = async () => {
     // Update user points based on activities
     for (const user of createdUsers) {
       const userIssues = createdIssues.filter(issue => issue.username.toString() === user._id.toString());
-      
+
       const issuePoints = userIssues.length * 50; // 50 points per issue reported
-      
+
       await User.findByIdAndUpdate(user._id, {
         points: user.points + issuePoints,
         issuecount: userIssues.length
@@ -216,7 +216,7 @@ const seedData = async () => {
     console.log(`- Users: ${createdUsers.length}`);
     console.log(`- Organizations: ${createdOrgs.length}`);
     console.log(`- Issues: ${createdIssues.length}`);
-    
+
     console.log('\n🔑 Login Credentials:');
     console.log('User: johnsmith@email.com / password123');
     console.log('User: sarah.j@email.com / password123');
