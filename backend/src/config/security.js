@@ -1,27 +1,27 @@
-import rateLimit from 'express-rate-limit';
-import helmet from 'helmet';
-import xss from 'xss';
-import jwt from 'jsonwebtoken';
+import rateLimit from "express-rate-limit";
+import helmet from "helmet";
+import jwt from "jsonwebtoken";
+import xss from "xss";
 
 // Rate limiting configuration
 export const rateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per windowMs
   message: {
-    error: 'Too many requests from this IP, please try again later.'
+    error: "Too many requests from this IP, please try again later."
   },
   standardHeaders: true,
-  legacyHeaders: false,
+  legacyHeaders: false
 });
 
 // Stricter rate limiting for authentication endpoints
 export const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // limit each IP to 5 auth requests per windowMs
+  max: 20, // limit each IP to 5 auth requests per windowMs
   message: {
-    error: 'Too many authentication attempts, please try again later.'
+    error: "Too many authentication attempts, please try again later."
   },
-  skipSuccessfulRequests: true,
+  skipSuccessfulRequests: true
 });
 
 // Security headers configuration
@@ -33,13 +33,17 @@ export const securityHeaders = helmet({
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https:", "http:"],
       scriptSrc: ["'self'"],
-      connectSrc: ["'self'", "https://accounts.google.com", "https://api.github.com"],
+      connectSrc: [
+        "'self'",
+        "https://accounts.google.com",
+        "https://api.github.com"
+      ],
       frameSrc: ["'none'"],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
       formAction: ["'self'"],
-      frameAncestors: ["'none'"],
-    },
+      frameAncestors: ["'none'"]
+    }
   },
   crossOriginEmbedderPolicy: false,
   hsts: {
@@ -53,25 +57,25 @@ export const securityHeaders = helmet({
 export const sanitizeInput = (req, res, next) => {
   // Sanitize request body
   if (req.body) {
-    Object.keys(req.body).forEach(key => {
-      if (typeof req.body[key] === 'string') {
+    Object.keys(req.body).forEach((key) => {
+      if (typeof req.body[key] === "string") {
         req.body[key] = xss(req.body[key]);
       }
     });
   }
-  
+
   // Sanitize query parameters (use sanitized query if available from mongoSanitizeMiddleware)
   const queryToSanitize = req.sanitizedQuery || req.query;
   if (queryToSanitize) {
-    Object.keys(queryToSanitize).forEach(key => {
-      if (typeof queryToSanitize[key] === 'string') {
+    Object.keys(queryToSanitize).forEach((key) => {
+      if (typeof queryToSanitize[key] === "string") {
         queryToSanitize[key] = xss(queryToSanitize[key]);
       }
     });
     // Store sanitized query for use in routes
     req.sanitizedQuery = queryToSanitize;
   }
-  
+
   next();
 };
 
@@ -80,15 +84,15 @@ export const sanitizeInput = (req, res, next) => {
 // Express 5 makes req.query read-only, so we need a different approach
 
 const sanitizeObject = (obj) => {
-  if (!obj || typeof obj !== 'object') return obj;
-  
+  if (!obj || typeof obj !== "object") return obj;
+
   if (Array.isArray(obj)) {
-    return obj.map(item => sanitizeObject(item));
+    return obj.map((item) => sanitizeObject(item));
   }
-  
+
   const sanitized = {};
   const dangerousPatterns = /\$|\.|prototype|__proto__|constructor/;
-  
+
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
       // Check for dangerous MongoDB operators and prototype pollution
@@ -96,48 +100,55 @@ const sanitizeObject = (obj) => {
         // Skip dangerous keys to prevent NoSQL injection
         continue;
       }
-      
+
       const value = obj[key];
-      
+
       // Recursively sanitize nested objects
-      if (value && typeof value === 'object' && !Array.isArray(value) && value.constructor === Object) {
+      if (
+        value &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        value.constructor === Object
+      ) {
         sanitized[key] = sanitizeObject(value);
       } else if (Array.isArray(value)) {
-        sanitized[key] = value.map(item => 
-          typeof item === 'object' && item !== null && !Array.isArray(item) ? sanitizeObject(item) : item
+        sanitized[key] = value.map((item) =>
+          typeof item === "object" && item !== null && !Array.isArray(item)
+            ? sanitizeObject(item)
+            : item
         );
       } else {
         sanitized[key] = value;
       }
     }
   }
-  
+
   return sanitized;
 };
 
 export const mongoSanitizeMiddleware = (req, res, next) => {
   try {
     // Sanitize request body (can be modified in Express 5)
-    if (req.body && typeof req.body === 'object') {
+    if (req.body && typeof req.body === "object") {
       req.body = sanitizeObject(req.body);
     }
-    
+
     // Sanitize query parameters
     // In Express 5, req.query is read-only, so we create a sanitized copy
-    if (req.query && typeof req.query === 'object') {
+    if (req.query && typeof req.query === "object") {
       const sanitizedQuery = sanitizeObject(req.query);
       // Store sanitized query for use in route handlers
       req.sanitizedQuery = sanitizedQuery;
     }
-    
+
     // Sanitize params (can be modified)
-    if (req.params && typeof req.params === 'object') {
+    if (req.params && typeof req.params === "object") {
       req.params = sanitizeObject(req.params);
     }
-    
+
     next();
   } catch (error) {
-    console.error('MongoDB sanitization error:', error);
+    console.error("MongoDB sanitization error:", error);
     // Continue even if sanitization fails to avoid breaking the app
     next();
   }
@@ -147,26 +158,26 @@ export const mongoSanitizeMiddleware = (req, res, next) => {
 export const corsOptions = {
   origin: function (origin, callback) {
     const allowedOrigins = [
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'http://localhost:5175',
-      'https://yourdomain.com', // Add your production domain
-      'https://www.yourdomain.com'
+      "http://localhost:5173",
+      "http://localhost:5174",
+      "http://localhost:5175",
+      "https://yourdomain.com", // Add your production domain
+      "https://www.yourdomain.com"
     ];
-    
+
     // Allow requests with no origin (mobile apps, curl, etc.)
     if (!origin) return callback(null, true);
-    
+
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      callback(new Error("Not allowed by CORS"));
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  exposedHeaders: ['X-Total-Count'],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  exposedHeaders: ["X-Total-Count"],
   maxAge: 86400 // 24 hours
 };
 
@@ -176,9 +187,9 @@ export const validateInput = (schema) => {
     const { error } = schema.validate(req.body);
     if (error) {
       return res.status(400).json({
-        error: 'Validation failed',
-        details: error.details.map(detail => ({
-          field: detail.path.join('.'),
+        error: "Validation failed",
+        details: error.details.map((detail) => ({
+          field: detail.path.join("."),
           message: detail.message
         }))
       });
@@ -189,18 +200,18 @@ export const validateInput = (schema) => {
 
 // JWT token validation middleware
 export const validateJWT = (req, res, next) => {
-  const token = req.header('Authorization')?.replace('Bearer ', '');
-  
+  const token = req.header("Authorization")?.replace("Bearer ", "");
+
   if (!token) {
-    return res.status(401).json({ error: 'Access denied. No token provided.' });
+    return res.status(401).json({ error: "Access denied. No token provided." });
   }
-  
+
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded;
     next();
   } catch (error) {
-    res.status(401).json({ error: 'Invalid token.' });
+    res.status(401).json({ error: "Invalid token." });
   }
 };
 
@@ -211,25 +222,25 @@ export const validatePasswordStrength = (password) => {
   const hasLowerCase = /[a-z]/.test(password);
   const hasNumbers = /\d/.test(password);
   const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
-  
+
   const errors = [];
-  
+
   if (password.length < minLength) {
     errors.push(`Password must be at least ${minLength} characters long`);
   }
   if (!hasUpperCase) {
-    errors.push('Password must contain at least one uppercase letter');
+    errors.push("Password must contain at least one uppercase letter");
   }
   if (!hasLowerCase) {
-    errors.push('Password must contain at least one lowercase letter');
+    errors.push("Password must contain at least one lowercase letter");
   }
   if (!hasNumbers) {
-    errors.push('Password must contain at least one number');
+    errors.push("Password must contain at least one number");
   }
   if (!hasSpecialChar) {
-    errors.push('Password must contain at least one special character');
+    errors.push("Password must contain at least one special character");
   }
-  
+
   return {
     isValid: errors.length === 0,
     errors
@@ -242,57 +253,65 @@ export const sessionSecurity = {
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === "production",
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: 'strict'
+    sameSite: "strict"
   },
-  name: 'sessionId' // Avoid default session name for security
+  name: "sessionId" // Avoid default session name for security
 };
 
 // Environment validation
 export const validateEnvironment = () => {
   // Set defaults for development if not provided
   if (!process.env.JWT_SECRET) {
-    process.env.JWT_SECRET = 'your-secret-key-change-in-production';
-    console.warn('⚠️  JWT_SECRET not set, using default (NOT SECURE FOR PRODUCTION)');
+    process.env.JWT_SECRET = "your-secret-key-change-in-production";
+    console.warn(
+      "⚠️  JWT_SECRET not set, using default (NOT SECURE FOR PRODUCTION)"
+    );
   }
-  
+
   if (!process.env.SESSION_SECRET) {
-    process.env.SESSION_SECRET = 'your-session-secret-change-in-production';
-    console.warn('⚠️  SESSION_SECRET not set, using default (NOT SECURE FOR PRODUCTION)');
+    process.env.SESSION_SECRET = "your-session-secret-change-in-production";
+    console.warn(
+      "⚠️  SESSION_SECRET not set, using default (NOT SECURE FOR PRODUCTION)"
+    );
   }
-  
+
   if (!process.env.MONGO_URI) {
-    process.env.MONGO_URI = 'mongodb://127.0.0.1:27017/greencity_project';
-    console.warn('⚠️  MONGO_URI not set, using default local MongoDB');
+    process.env.MONGO_URI = "mongodb://127.0.0.1:27017/greencity_project";
+    console.warn("⚠️  MONGO_URI not set, using default local MongoDB");
   }
-  
+
   // Only throw errors in production
-  if (process.env.NODE_ENV === 'production') {
-    const requiredEnvVars = [
-      'JWT_SECRET',
-      'SESSION_SECRET',
-      'MONGO_URI'
-    ];
-    
-    const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-    
+  if (process.env.NODE_ENV === "production") {
+    const requiredEnvVars = ["JWT_SECRET", "SESSION_SECRET", "MONGO_URI"];
+
+    const missingVars = requiredEnvVars.filter(
+      (varName) => !process.env[varName]
+    );
+
     if (missingVars.length > 0) {
-      throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
+      throw new Error(
+        `Missing required environment variables: ${missingVars.join(", ")}`
+      );
     }
-    
+
     const productionVars = [
-      'GOOGLE_CLIENT_ID',
-      'GOOGLE_CLIENT_SECRET',
-      'GITHUB_CLIENT_ID',
-      'GITHUB_CLIENT_SECRET'
+      "GOOGLE_CLIENT_ID",
+      "GOOGLE_CLIENT_SECRET",
+      "GITHUB_CLIENT_ID",
+      "GITHUB_CLIENT_SECRET"
     ];
-    
-    const missingProductionVars = productionVars.filter(varName => !process.env[varName]);
-    
+
+    const missingProductionVars = productionVars.filter(
+      (varName) => !process.env[varName]
+    );
+
     if (missingProductionVars.length > 0) {
-      console.warn(`Warning: Missing production environment variables: ${missingProductionVars.join(', ')}`);
+      console.warn(
+        `Warning: Missing production environment variables: ${missingProductionVars.join(", ")}`
+      );
     }
   }
 };

@@ -1,5 +1,5 @@
 import Issue from '../models/issue.js';
-import User from '../models/auth.js';
+import User from '../models/User.js';
 import Organization from '../models/organization.js';
 import IssueSolved from '../models/issuesolved.js';
 

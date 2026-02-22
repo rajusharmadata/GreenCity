@@ -4,7 +4,7 @@ import { Strategy as JwtStrategy, ExtractJwt } from 'passport-jwt';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { Strategy as GitHubStrategy } from 'passport-github2';
 import https from 'https';
-import User from '../models/auth.js';
+import User from '../models/User.js';
 import Organization from '../models/organization.js';
 
 dotenv.config();
@@ -66,19 +66,30 @@ const jwtOptions = {
 
 passport.use(new JwtStrategy(jwtOptions, async (jwt_payload, done) => {
   try {
+    if (!jwt_payload) {
+      return done(new Error('Invalid token payload'), false);
+    }
+    
     let user;
     
     if (jwt_payload.role === 'organization') {
+      if (!jwt_payload.orgId) {
+        return done(new Error('Organization ID missing in token'), false);
+      }
       user = await Organization.findById(jwt_payload.orgId);
     } else {
+      if (!jwt_payload.userId) {
+        return done(new Error('User ID missing in token'), false);
+      }
       user = await User.findById(jwt_payload.userId);
     }
     
     if (user) {
       return done(null, user);
     }
-    return done(null, false);
+    return done(new Error('User not found'), false);
   } catch (error) {
+    console.error('JWT Strategy error:', error);
     return done(error, false);
   }
 }));

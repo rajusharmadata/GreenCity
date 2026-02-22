@@ -1,5 +1,5 @@
 // controllers/rankController.js
-import User from '../models/auth.js';
+import User from '../models/User.js';
 
 export const getUserRankings = async (req, res) => {
   try {

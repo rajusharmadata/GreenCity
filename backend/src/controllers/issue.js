@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import Issue from '../models/issue.js';
-import User from '../models/auth.js';
+import User from '../models/User.js';
 import cloudinary from '../config/cloudinary.js';
 
 function generateIssueCode() {
