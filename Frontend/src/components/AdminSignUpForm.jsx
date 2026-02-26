@@ -1,7 +1,7 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, Link } from 'react-router-dom';
-import { AuthContext } from '../context/authcontext';
+import { AuthContext } from '../features/auth/context/authcontext';
 import { 
   Building2, 
   Mail, 

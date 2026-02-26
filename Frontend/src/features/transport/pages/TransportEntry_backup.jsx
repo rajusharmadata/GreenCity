@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
-import axiosInstance from '../config/axios';
-import { API_ENDPOINTS } from '../config/api';
+import axiosInstance from '../../../config/axios';
+import { API_ENDPOINTS } from '../../../config/api';
 
 function TransportEntry() {
   const { register, handleSubmit, control, formState: { errors }, reset } = useForm({

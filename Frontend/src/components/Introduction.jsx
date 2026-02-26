@@ -1,167 +1,170 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Leaf, 
-  Globe, 
-  Heart, 
-  Users, 
-  Zap,
-  ArrowRight,
-  Sparkles,
-  TreePine
-} from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Leaf, Globe, Users, Zap, ArrowRight } from 'lucide-react';
+
+const features = [
+  { icon: Leaf, label: 'Eco-Friendly', desc: 'Carbon-neutral by design' },
+  { icon: Globe, label: 'Global Impact', desc: 'World-scale thinking' },
+  { icon: Users, label: 'Community', desc: 'Citizen-first approach' },
+  { icon: Zap, label: 'Smart Data', desc: 'AI-powered analytics' },
+];
+
+const ITEM = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.23, 1, 0.32, 1] } },
+};
 
 function IntroSection() {
-  const features = [
-    { icon: Leaf, label: 'Eco-Friendly', color: 'text-green-600' },
-    { icon: Globe, label: 'Global Impact', color: 'text-blue-600' },
-    { icon: Users, label: 'Community Driven', color: 'text-purple-600' },
-    { icon: Zap, label: 'Smart Solutions', color: 'text-yellow-600' }
-  ];
-
   return (
-    <motion.section 
-      initial={{ opacity: 0 }}
-      whileInView={{ opacity: 1 }}
-      transition={{ duration: 0.8 }}
-      viewport={{ once: true }}
-      className="relative py-20 px-4 bg-gradient-to-br from-emerald-50 via-cyan-50 to-blue-50 overflow-hidden"
+    <section
+      className="relative py-28 px-4 overflow-hidden"
+      style={{ background: '#0a1410' }}
     >
-      {/* Background Decorations */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-          className="absolute top-10 right-10 w-32 h-32 bg-emerald-100 rounded-full opacity-30"
-        />
-        <motion.div
-          animate={{ rotate: -360 }}
-          transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
-          className="absolute bottom-10 left-10 w-40 h-40 bg-cyan-100 rounded-full opacity-30"
-        />
-      </div>
+      {/* Diagonal top cut */}
+      <div
+        className="absolute top-0 inset-x-0 h-16 pointer-events-none"
+        style={{
+          background: '#080d0a',
+          clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 0)',
+        }}
+      />
+      {/* Diagonal bottom cut */}
+      <div
+        className="absolute bottom-0 inset-x-0 h-16 pointer-events-none"
+        style={{
+          background: '#080d0a',
+          clipPath: 'polygon(0 100%, 100% 0, 100% 100%)',
+        }}
+      />
 
-      <div className="max-w-6xl mx-auto relative z-10">
-        {/* Main Content */}
-        <motion.div 
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          viewport={{ once: true }}
-          className="text-center mb-16"
-        >
-          {/* Badge */}
+      {/* Background accent */}
+      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[500px] h-[500px] pointer-events-none rounded-full"
+        style={{ background: 'radial-gradient(circle, rgba(57,255,128,0.04) 0%, transparent 70%)' }} />
+
+      {/* Hex dot texture */}
+      <div className="absolute inset-0 opacity-30"
+        style={{
+          backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(57,255,128,0.06) 1px, transparent 0)',
+          backgroundSize: '24px 24px',
+        }}
+      />
+
+      <div className="relative z-10 max-w-7xl mx-auto">
+        {/* Two-column editorial split */}
+        <div className="grid lg:grid-cols-2 gap-16 items-center mb-20">
+
+          {/* Left: big heading */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
+            initial="hidden"
+            whileInView="show"
             viewport={{ once: true }}
-            className="inline-flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-emerald-100 to-cyan-100 rounded-full mb-6"
+            variants={{ show: { transition: { staggerChildren: 0.1 } } }}
           >
-            <Sparkles className="w-4 h-4 text-emerald-600" />
-            <span className="text-sm font-medium text-emerald-700">Sustainable Living Platform</span>
-          </motion.div>
-
-          {/* Title */}
-          <motion.h2 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            viewport={{ once: true }}
-            className="text-5xl font-bold mb-6"
-          >
-            <span className="bg-gradient-to-r from-emerald-600 via-cyan-600 to-blue-600 bg-clip-text text-transparent">
-              Welcome to Green City
-            </span>
-            <div className="flex justify-center mt-4">
-              <TreePine className="w-8 h-8 text-emerald-500" />
-            </div>
-          </motion.h2>
-
-          {/* Description */}
-          <motion.p 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.4 }}
-            viewport={{ once: true }}
-            className="text-xl text-gray-600 leading-relaxed max-w-3xl mx-auto mb-8"
-          >
-            Transform your urban lifestyle with our innovative platform connecting you to 
-            <span className="font-semibold text-emerald-600"> eco-friendly initiatives</span>, 
-            <span className="font-semibold text-cyan-600"> sustainable transport</span>, and 
-            <span className="font-semibold text-blue-600"> green community projects</span>.
-          </motion.p>
-
-          {/* CTA Buttons */}
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.5 }}
-            viewport={{ once: true }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4"
-          >
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="px-8 py-4 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200 flex items-center space-x-2"
+            <motion.p variants={ITEM} className="mono-label mb-4" style={{ color: 'rgba(57,255,128,0.6)', fontSize: '0.7rem' }}>
+              01 — Platform Introduction
+            </motion.p>
+            <motion.h2
+              variants={ITEM}
+              className="text-5xl md:text-6xl font-extrabold leading-none mb-6"
+              style={{ fontFamily: 'Syne', color: '#e8f5ee', letterSpacing: '-0.03em' }}
             >
-              <span>Get Started Today</span>
-              <ArrowRight className="w-4 h-4" />
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="px-8 py-4 bg-white text-emerald-600 border-2 border-emerald-200 rounded-xl font-medium hover:bg-emerald-50 transition-all duration-200 flex items-center space-x-2"
-            >
-              <Heart className="w-4 h-4" />
-              <span>Learn More</span>
-            </motion.button>
-          </motion.div>
-        </motion.div>
+              Welcome to{' '}
+              <br />
+              <span style={{ color: '#39ff80' }}>Green City</span>
+            </motion.h2>
 
-        {/* Feature Cards */}
-        <motion.div 
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.6 }}
-          viewport={{ once: true }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
-        >
-          {features.map((feature, index) => {
-            const Icon = feature.icon;
-            return (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.7 + index * 0.1 }}
-                viewport={{ once: true }}
-                whileHover={{ y: -5, scale: 1.02 }}
-                className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-100"
+            {/* Decorative line */}
+            <motion.div
+              variants={ITEM}
+              className="w-20 h-px mb-8"
+              style={{ background: 'linear-gradient(to right, #39ff80, transparent)' }}
+            />
+
+            <motion.div variants={ITEM}>
+              <Link
+                to="/eco-transport"
+                className="btn-neon inline-flex items-center gap-3 px-8 py-3.5 rounded-full text-sm"
               >
-                <div className="flex flex-col items-center text-center space-y-4">
-                  <motion.div
-                    whileHover={{ rotate: 360, scale: 1.1 }}
-                    transition={{ duration: 0.6 }}
-                    className={`w-16 h-16 bg-gradient-to-r from-gray-50 to-gray-100 rounded-2xl flex items-center justify-center shadow-md`}
-                  >
-                    <Icon className={`w-8 h-8 ${feature.color}`} />
-                  </motion.div>
-                  <div>
-                    <h3 className={`font-semibold text-lg ${feature.color}`}>
-                      {feature.label}
-                    </h3>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Experience sustainable living
-                    </p>
-                  </div>
-                </div>
-              </motion.div>
-            );
-          })}
-        </motion.div>
+                Explore Platform
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </motion.div>
+          </motion.div>
+
+          {/* Right: description + feature tags */}
+          <motion.div
+            initial={{ opacity: 0, x: 30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.7, ease: [0.23, 1, 0.32, 1] }}
+            className="space-y-8"
+          >
+            <p
+              className="text-base leading-relaxed"
+              style={{ fontFamily: 'DM Mono', color: 'rgba(230,245,236,0.5)', lineHeight: '2' }}
+            >
+              Transform your urban lifestyle with our platform connecting you to
+              eco-friendly initiatives, sustainable transport corridors, and
+              green community projects that make a measurable difference.
+            </p>
+
+            <div className="flex flex-wrap gap-3">
+              {['Eco-Friendly', 'AI-Powered', 'Citizen-First', 'Real-Time'].map(tag => (
+                <span
+                  key={tag}
+                  className="px-4 py-1.5 rounded-full text-xs"
+                  style={{
+                    fontFamily: 'DM Mono',
+                    background: 'rgba(57,255,128,0.05)',
+                    color: 'rgba(57,255,128,0.65)',
+                    border: '1px solid rgba(57,255,128,0.12)',
+                    letterSpacing: '0.08em',
+                  }}
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Feature icon grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {features.map((feat, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 24 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: i * 0.1, duration: 0.6, ease: [0.23, 1, 0.32, 1] }}
+              className="bio-card p-6 flex flex-col items-start gap-4 group"
+            >
+              <div
+                className="h-10 w-10 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:scale-110"
+                style={{
+                  background: 'rgba(57,255,128,0.07)',
+                  border: '1px solid rgba(57,255,128,0.12)',
+                }}
+              >
+                <feat.icon className="w-5 h-5" style={{ color: '#39ff80' }} />
+              </div>
+              <div>
+                <h3
+                  className="text-sm font-bold mb-1"
+                  style={{ fontFamily: 'Syne', color: '#e8f5ee' }}
+                >
+                  {feat.label}
+                </h3>
+                <p className="text-xs" style={{ fontFamily: 'DM Mono', color: 'rgba(230,245,236,0.4)' }}>
+                  {feat.desc}
+                </p>
+              </div>
+            </motion.div>
+          ))}
+        </div>
       </div>
-    </motion.section>
+    </section>
   );
 }
 

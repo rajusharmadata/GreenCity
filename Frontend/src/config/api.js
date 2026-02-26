@@ -3,10 +3,11 @@ const isDevelopment = import.meta.env.DEV;
 const stripTrailingSlash = (url = '') => url.replace(/\/+$/, '');
 
 const envBaseUrl = [
-  import.meta.env.VITE_API_BASE_URL,
+  import.meta.env.VITE_BACKEND_URL,
   import.meta.env.VITE_API_URL,
-  import.meta.env.VITE_BACKEND_URL
-].map(stripTrailingSlash).find(Boolean);
+]
+  .map(stripTrailingSlash)
+  .find(Boolean)
 
 /**
  * API_BASE_URL represents the host where the backend is served.

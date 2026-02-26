@@ -10,6 +10,7 @@ import {
   googleMobile
 } from '../controllers/authController.js';
 import { authenticate } from '../middleware/auth.js';
+import { uploadSingle } from '../middleware/upload.js';
 
 const router = express.Router();
 
@@ -25,7 +26,7 @@ router.post('/google/mobile', googleMobile); // Mobile Google OAuth token exchan
 router.get('/me', authenticate, getMe);
 router.put('/profile', authenticate, updateProfile);
 router.patch('/profile', authenticate, updateProfile);   // Mobile uses PATCH
-router.post('/profile/avatar', authenticate, updateProfile); // Avatar upload handled in updateProfile
+router.post('/profile/avatar', authenticate, uploadSingle('avatar'), updateProfile); // Avatar upload handled in updateProfile
 router.delete('/account', authenticate, deleteAccount);  // Delete account
 
 export default router;

@@ -1,6 +1,13 @@
 import mongoose from 'mongoose';
 
 const issueSchema = new mongoose.Schema({
+  issueCode: {
+    type: String,
+    unique: true,
+    sparse: false,
+    required: true,
+    index: true
+  },
   title: {
     type: String,
     required: true,
@@ -68,9 +75,20 @@ const issueSchema = new mongoose.Schema({
 });
 
 // Index for efficient querying
+issueSchema.index({ issueCode: 1 }, { unique: true });
 issueSchema.index({ createdAt: -1 });
 issueSchema.index({ status: 1 });
 issueSchema.index({ category: 1 });
 issueSchema.index({ userId: 1 });
+
+// Ensure a unique, non-null issueCode is assigned
+issueSchema.pre('validate', function (next) {
+  if (!this.issueCode) {
+    const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+    const ts = Date.now().toString(36).toUpperCase();
+    this.issueCode = `ISS-${ts}-${rand}`;
+  }
+  next();
+});
 
 export default mongoose.model('Issue', issueSchema);

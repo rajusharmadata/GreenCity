@@ -1,6 +1,6 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth, ROLES, PERMISSIONS } from '../context/authcontext';
+import { useAuth, ROLES, PERMISSIONS } from '../features/auth/context/authcontext';
 
 // Enhanced ProtectedRoute with role-based access control
 const ProtectedRoute = ({ children, requiredRole, requiredPermission, redirectTo = '/' }) => {

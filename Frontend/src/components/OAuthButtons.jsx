@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FcGoogle } from 'react-icons/fc';
 import { FaGithub } from 'react-icons/fa';
+import { FiActivity } from 'react-icons/fi';
 import { API_ROOT } from '../config/api';
 
 const OAuthButtons = () => {
@@ -8,7 +9,7 @@ const OAuthButtons = () => {
   const [status, setStatus] = useState('');
 
   const handleRedirect = (provider) => {
-    setStatus(`Redirecting to ${provider === 'google' ? 'Google' : 'GitHub'}...`);
+    setStatus(`Routing to ${provider === 'google' ? 'Google' : 'GitHub'} Node...`);
     setLoading((prev) => ({ ...prev, [provider]: true }));
 
     try {
@@ -16,39 +17,43 @@ const OAuthButtons = () => {
       window.location.href = oauthUrl;
     } catch (error) {
       console.error(`${provider} login error:`, error);
-      setStatus(`${provider === 'google' ? 'Google' : 'GitHub'} login failed. Please try again later.`);
+      setStatus(`${provider === 'google' ? 'Google' : 'GitHub'} Signal Offline.`);
       setLoading({ google: false, github: false });
     }
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-6">
       <div className="relative">
         <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-gray-300" />
+          <div className="w-full border-t border-white/5" />
         </div>
-        <div className="relative flex justify-center text-sm">
-          <span className="px-2 bg-white text-gray-500">Or continue with</span>
+        <div className="relative flex justify-center text-[9px] font-black uppercase tracking-[0.4em] font-mono">
+          <span className="px-4 bg-[#0d261a] text-slate-700">External Pulse</span>
         </div>
       </div>
 
       {status && (
-        <p className="text-center text-xs text-slate-500" aria-live="polite">
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-center text-[9px] font-black text-emerald-500/40 uppercase tracking-widest font-mono"
+        >
           {status}
-        </p>
+        </motion.p>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-4">
         <button
           onClick={() => handleRedirect('google')}
           disabled={loading.google || loading.github}
-          className="flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+          className="flex items-center justify-center gap-3 px-6 py-4 bio-card border-white/5 bg-white/[0.02] hover:bg-white/5 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-all disabled:opacity-50 font-mono"
         >
           {loading.google ? (
-            <div className="w-4 h-4 border-2 border-gray-300 border-t-emerald-500 rounded-full animate-spin" />
+            <FiActivity className="animate-spin text-emerald-500" />
           ) : (
             <>
-              <FcGoogle className="w-5 h-5 mr-2" />
+              <FcGoogle className="text-lg" />
               Google
             </>
           )}
@@ -57,13 +62,13 @@ const OAuthButtons = () => {
         <button
           onClick={() => handleRedirect('github')}
           disabled={loading.google || loading.github}
-          className="flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+          className="flex items-center justify-center gap-3 px-6 py-4 bio-card border-white/5 bg-white/[0.02] hover:bg-white/5 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-all disabled:opacity-50 font-mono"
         >
           {loading.github ? (
-            <div className="w-4 h-4 border-2 border-gray-300 border-t-emerald-500 rounded-full animate-spin" />
+            <FiActivity className="animate-spin text-emerald-500" />
           ) : (
             <>
-              <FaGithub className="w-5 h-5 mr-2" />
+              <FaGithub className="text-lg text-white" />
               GitHub
             </>
           )}

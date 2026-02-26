@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axiosInstance from '../config/axios';
-import { API_ENDPOINTS } from '../config/api';
-import { useNotification } from './NotificationContext';
+import axiosInstance from '../../../config/axios';
+import { API_ENDPOINTS } from '../../../config/api';
+import { useNotification } from '../../../context/NotificationContext';
 
 // Authentication context with enhanced features
 const AuthContext = createContext();
@@ -10,7 +10,7 @@ const AuthContext = createContext();
 // Role definitions
 export const ROLES = {
   USER: 'user',
-  ADMIN: 'admin', 
+  ADMIN: 'admin',
   ORGANIZATION: 'organization',
   GUEST: 'guest'
 };
@@ -21,16 +21,16 @@ export const PERMISSIONS = {
   VIEW_DASHBOARD: 'view_dashboard',
   REPORT_ISSUE: 'report_issue',
   VIEW_GAMIFICATION: 'view_gamification',
-  
+
   // Admin permissions
   MANAGE_TRANSPORT: 'manage_transport',
   VIEW_ADMIN_DASHBOARD: 'view_admin_dashboard',
   MANAGE_USERS: 'manage_users',
-  
+
   // Organization permissions
   MANAGE_ORG_ISSUES: 'manage_org_issues',
   VIEW_ORG_STATS: 'view_org_stats',
-  
+
   // Common permissions
   VIEW_PROFILE: 'view_profile',
   EDIT_PROFILE: 'edit_profile'
@@ -81,8 +81,8 @@ export const AuthProvider = ({ children }) => {
       (userTypeValue === 'admin'
         ? ROLES.ADMIN
         : userTypeValue === 'organization'
-        ? ROLES.ORGANIZATION
-        : ROLES.USER);
+          ? ROLES.ORGANIZATION
+          : ROLES.USER);
     const snapshot = {
       ...payload,
       role: safeRole,
@@ -117,7 +117,7 @@ export const AuthProvider = ({ children }) => {
   const hasPermission = (permission) => {
     const current = getCurrentUser();
     if (!current) return false;
-    
+
     const userPermissions = ROLE_PERMISSIONS[current.role] || [];
     return userPermissions.includes(permission);
   };
@@ -148,23 +148,23 @@ export const AuthProvider = ({ children }) => {
     try {
       const token = localStorage.getItem('token');
       const userType = localStorage.getItem('userType');
-      
+
       if (token && userType) {
         // Set default auth header
         axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        
+
         // Verify token and fetch user data
         try {
           if (userType === 'user' || userType === 'admin') {
             const response = await axiosInstance.get(`${API_ENDPOINTS.USER_PROFILE}`);
             const userData = response.data;
-            
+
             // Check if email is verified
             if (!userData.isEmailVerified && userData.role === 'user') {
               // Don't clear auth, but show warning
               console.warn('Email not verified');
             }
-            
+
             setUser(userData);
             setCurrentUser({ ...userData, role: userData.role || ROLES.USER });
             cacheUserSnapshot(userData, userType);
@@ -179,7 +179,7 @@ export const AuthProvider = ({ children }) => {
           console.error('Token verification failed:', tokenError);
           const status = tokenError.response?.status;
           if (status === 401 || status === 403) {
-          clearAuth();
+            clearAuth();
           } else if (cachedSnapshot && cachedSnapshot.userType === userType) {
             if (userType === 'organization') {
               setOrganization(cachedSnapshot);
@@ -210,19 +210,19 @@ export const AuthProvider = ({ children }) => {
 
     setError('');
     setLoading(true);
-    
+
     try {
       const normalizedRole = userData.role === 'admin' ? ROLES.ADMIN : ROLES.USER;
       localStorage.setItem('token', token);
       localStorage.setItem('userType', normalizedRole === ROLES.ADMIN ? 'admin' : 'user');
       cacheUserSnapshot(userData, normalizedRole === ROLES.ADMIN ? 'admin' : 'user');
       axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      
+
       setUser(userData);
       setCurrentUser({ ...userData, role: normalizedRole });
       setOrganization(null);
       setIsAuthenticated(true);
-      
+
       // Don't show notification here - let the callback component handle it
       return userData;
     } catch (err) {
@@ -240,7 +240,7 @@ export const AuthProvider = ({ children }) => {
     setLoading(true);
     try {
       let endpoint;
-      
+
       if (userType === 'user') {
         endpoint = API_ENDPOINTS.USER_LOGIN;
       } else if (userType === 'organization') {
@@ -252,7 +252,7 @@ export const AuthProvider = ({ children }) => {
       }
 
       const response = await axiosInstance.post(endpoint, { email, password });
-      
+
       // Check if email verification is required
       if (response.data.requiresVerification) {
         const errorMessage = 'Please verify your email before logging in.';
@@ -260,7 +260,7 @@ export const AuthProvider = ({ children }) => {
         notifyError(errorMessage);
         throw new Error(errorMessage);
       }
-      
+
       const { token, user: userData, organization: orgData } = response.data;
 
       // Store token and user type
@@ -290,7 +290,7 @@ export const AuthProvider = ({ children }) => {
         notifyError(errorMessage);
         throw { ...err, requiresVerification: true, email: err.response?.data?.email };
       }
-      
+
       const errorMessage = err.response?.data?.error || err.response?.data?.message || 'Login failed. Please try again.';
       setError(errorMessage);
       notifyError(errorMessage);
@@ -317,15 +317,15 @@ export const AuthProvider = ({ children }) => {
       }
 
       const response = await axiosInstance.post(endpoint, userData);
-      
+
       // If email verification is required, show appropriate message
-      if (response.data.requiresVerification || 
-          (userType === 'user' && !response.data.user?.isEmailVerified) ||
-          (userType === 'organization' && !response.data.organization?.isEmailVerified)) {
+      if (response.data.requiresVerification ||
+        (userType === 'user' && !response.data.user?.isEmailVerified) ||
+        (userType === 'organization' && !response.data.organization?.isEmailVerified)) {
         notifySuccess('Registration successful! Please check your email for the OTP to verify your account.');
         return { ...response.data, requiresVerification: true };
       }
-      
+
       notifySuccess('Registration successful! Please login.');
       return response.data;
     } catch (err) {
@@ -345,7 +345,7 @@ export const AuthProvider = ({ children }) => {
     try {
       let endpoint;
       let payload;
-      
+
       if (userType === 'organization') {
         endpoint = API_ENDPOINTS.ORG_VERIFY_EMAIL;
         // Determine if it's OTP (6 digits) or token (longer string)
@@ -363,7 +363,7 @@ export const AuthProvider = ({ children }) => {
           payload = { token: tokenOrOtp, email };
         }
       }
-      
+
       const response = await axiosInstance.post(endpoint, payload);
       notifySuccess('Email verified successfully! You can now login.');
       return response.data;
@@ -382,10 +382,10 @@ export const AuthProvider = ({ children }) => {
     setError('');
     setLoading(true);
     try {
-      const endpoint = userType === 'organization' 
-        ? API_ENDPOINTS.ORG_RESEND_VERIFICATION 
+      const endpoint = userType === 'organization'
+        ? API_ENDPOINTS.ORG_RESEND_VERIFICATION
         : API_ENDPOINTS.RESEND_VERIFICATION;
-      
+
       const response = await axiosInstance.post(endpoint, { email });
       notifySuccess('Verification email sent! Please check your inbox.');
       return response.data;
@@ -409,7 +409,7 @@ export const AuthProvider = ({ children }) => {
   // Refresh user data
   const refreshUserData = async () => {
     if (!isAuthenticated) return;
-    
+
     try {
       const userType = localStorage.getItem('userType');
       if (userType === 'user' || userType === 'admin') {
@@ -456,7 +456,7 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated,
     loading,
     error,
-    
+
     // Methods
     login,
     loginWithOAuth,
@@ -467,12 +467,12 @@ export const AuthProvider = ({ children }) => {
     refreshUserData,
     clearAuth,
     clearError: () => setError(''),
-    
+
     // Permission helpers
     hasPermission,
     hasRole,
     getCurrentUser,
-    
+
     // Role constants
     ROLES,
     PERMISSIONS,

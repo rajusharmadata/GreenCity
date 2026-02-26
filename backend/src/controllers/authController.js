@@ -5,6 +5,8 @@ import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { sendOTPEmail } from '../utils/emailService.js';
 import passport from 'passport';
+import cloudinary from '../config/cloudinary.js';
+import fs from 'fs/promises';
 
 // Generate JWT token
 const generateToken = (userId) => {
@@ -310,14 +312,33 @@ export const getMe = async (req, res) => {
 // Update user profile
 export const updateProfile = async (req, res) => {
   try {
-    const { name, bio, location, avatar } = req.body;
     const userId = req.user.userId;
+    const body = req.body || {};
+    const { name, bio, location } = body;
 
     const updateData = {};
     if (name !== undefined) updateData.name = name.trim();
     if (bio !== undefined) updateData.bio = bio.trim();
     if (location !== undefined) updateData.location = location.trim();
-    if (avatar !== undefined) updateData.avatar = avatar.trim();
+
+    // Handle avatar upload via req.file (upload to Cloudinary)
+    if (req.file) {
+      try {
+        const result = await cloudinary.uploader.upload(req.file.path, {
+          folder: process.env.CLOUDINARY_AVATAR_FOLDER || 'greencity_avatars',
+          resource_type: 'image'
+        });
+        // Clean up local temp file
+        await fs.unlink(req.file.path).catch(() => {});
+        updateData.avatar = result.secure_url;
+      } catch (e) {
+        // Best-effort cleanup
+        if (req.file?.path) await fs.unlink(req.file.path).catch(() => {});
+        return res.status(500).json({ error: 'Failed to upload avatar' });
+      }
+    } else if (body.avatar !== undefined) {
+      updateData.avatar = body.avatar.trim();
+    }
 
     const user = await User.findByIdAndUpdate(
       userId,
@@ -329,7 +350,15 @@ export const updateProfile = async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json({
+    // If this was an avatar upload request, return a minimal payload mobile expects
+    if (req.file) {
+      return res.json({
+        message: 'Avatar updated successfully',
+        avatar: user.avatar
+      });
+    }
+
+    return res.json({
       message: 'Profile updated successfully',
       user: {
         _id: user._id,

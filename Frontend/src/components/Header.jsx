@@ -2,7 +2,7 @@ import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Leaf, Home, Info, Phone, Mail, User, LogOut, Shield, Settings } from 'lucide-react';
-import { useAuth, ROLES, PERMISSIONS } from '../context/authcontext';
+import { useAuth, ROLES, PERMISSIONS } from '../features/auth/context/authcontext';
 
 function Header() {
   const location = useLocation();
