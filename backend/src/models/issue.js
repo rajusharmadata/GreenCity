@@ -33,11 +33,11 @@ const issueSchema = new mongoose.Schema({
   coords: {
     lat: {
       type: Number,
-      required: true
+      required: false
     },
     lng: {
       type: Number,
-      required: true
+      required: false
     }
   },
   image: {

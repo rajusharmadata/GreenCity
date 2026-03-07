@@ -18,6 +18,7 @@ const storage = multer.diskStorage({
     cb(null, uploadsDir);
   },
   filename: function (req, file, cb) {
+    console.log('Multer processing file:', file.originalname);
     // Generate unique filename
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     const ext = path.extname(file.originalname);
@@ -28,10 +29,12 @@ const storage = multer.diskStorage({
 
 // File filter for images only
 const fileFilter = (req, file, cb) => {
+  console.log('Multer file filter checking:', file.mimetype);
   // Allow only images
   if (file.mimetype.startsWith('image/')) {
     cb(null, true);
   } else {
+    console.error('Multer rejected file type:', file.mimetype);
     cb(new Error('Only image files are allowed'), false);
   }
 };

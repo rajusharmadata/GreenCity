@@ -102,12 +102,17 @@ app.use((req, res) => {
 
 // Error handler (production-safe)
 app.use((err, req, res, next) => {
-  console.error('❌ Server error:', err.message);
+  console.error('❌ Express error caught:', err.message);
+
+  // Don't crash the server on typical HTTP/Multer errors like 'Payload Too Large' or 'Unexpected end of form'
   const status = err.status ?? err.statusCode ?? 500;
   const message = process.env.NODE_ENV === 'production' && status === 500
     ? 'Internal server error'
     : (err.message || 'Something went wrong');
-  res.status(status).json({ error: message });
+
+  if (!res.headersSent) {
+    res.status(status).json({ error: message, details: err.message });
+  }
 });
 
 export default app;

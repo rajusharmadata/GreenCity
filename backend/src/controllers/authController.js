@@ -329,12 +329,13 @@ export const updateProfile = async (req, res) => {
           resource_type: 'image'
         });
         // Clean up local temp file
-        await fs.unlink(req.file.path).catch(() => {});
+        await fs.unlink(req.file.path).catch(() => { });
         updateData.avatar = result.secure_url;
       } catch (e) {
+        console.error('CLOUDINARY AVATAR UPLOAD ERROR:', e);
         // Best-effort cleanup
-        if (req.file?.path) await fs.unlink(req.file.path).catch(() => {});
-        return res.status(500).json({ error: 'Failed to upload avatar' });
+        if (req.file?.path) await fs.unlink(req.file.path).catch(() => { });
+        return res.status(500).json({ error: 'Failed to upload avatar', details: e.message });
       }
     } else if (body.avatar !== undefined) {
       updateData.avatar = body.avatar.trim();
