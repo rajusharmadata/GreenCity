@@ -156,25 +156,7 @@ export const mongoSanitizeMiddleware = (req, res, next) => {
 
 // CORS configuration for production
 export const corsOptions = {
-  origin: function (origin, callback) {
-    const allowedOrigins = [
-      "http://localhost:3000",
-      "http://localhost:8081",
-      "http://localhost:5174",
-      "http://localhost:5175",
-      "https://yourdomain.com", // Add your production domain
-      "https://www.yourdomain.com"
-    ];
-
-    // Allow requests with no origin (mobile apps, curl, etc.)
-    if (!origin) return callback(null, true);
-
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
+  origin: true,
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],

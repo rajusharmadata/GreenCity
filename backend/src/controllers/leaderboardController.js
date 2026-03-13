@@ -1,170 +1,250 @@
-import Leaderboard from '../models/Leaderboard.js';
-import User from '../models/User.js';
+import Leaderboard from "../models/Leaderboard.js";
+import User from "../models/User.js";
+import PointHistory from "../models/PointHistory.js";
 
-// Update leaderboard rankings
-export const updateLeaderboard = async () => {
+// ─────────────────────────────────────────────────────────────────────────────
+// TIER CONFIG
+// ─────────────────────────────────────────────────────────────────────────────
+const TIERS = [
+  { name: "Eco Newcomer", min: 0, max: 99, icon: "🌱", color: "#94a3b8" },
+  { name: "Green Scout", min: 100, max: 299, icon: "🍃", color: "#34d399" },
+  { name: "City Guardian", min: 300, max: 699, icon: "🌿", color: "#10b981" },
+  { name: "Eco Warrior", min: 700, max: 1499, icon: "⚡", color: "#06b6d4" },
+  { name: "Urban Hero", min: 1500, max: 2999, icon: "🌍", color: "#6366f1" },
+  {
+    name: "Planet Saviour",
+    min: 3000,
+    max: Infinity,
+    icon: "🏆",
+    color: "#f59e0b"
+  }
+];
+
+const getTierName = (points = 0) =>
+  (TIERS.find((t) => points >= t.min && points <= t.max) ?? TIERS[0]).name;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BADGES (mega-spec style)
+// ─────────────────────────────────────────────────────────────────────────────
+const BADGES = [
+  { name: "Green Starter", points: 50 },
+  { name: "Eco Warrior", points: 200 },
+  { name: "City Guardian", points: 500 },
+  { name: "Planet Hero", points: 1000 }
+];
+
+const computeBadges = (points = 0) =>
+  BADGES.filter((b) => points >= b.points).map((b) => b.name);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ✅ addPoints — PURE UTILITY, called from other controllers
+// FIX 1: Was calling updateLeaderboard() on every invocation = O(n) DB writes
+//         per issue report. Now only updates the single user's doc.
+// FIX 2: Now auto-updates tier when points change.
+// ─────────────────────────────────────────────────────────────────────────────
+export const addPoints = async (userId, points, reason = "Action") => {
   try {
-    // Get all users sorted by points
-    const users = await User.find({})
-      .sort({ points: -1 })
-      .select('_id name avatar tier points reportsCount badges');
+    if (!userId || points === undefined || points === null) return null;
 
-    // Update rankings
-    for (let i = 0; i < users.length; i++) {
-      const user = users[i];
-      const currentRank = i + 1;
+    const user = await User.findById(userId).select(
+      "points tier name avatar reportsCount badges"
+    );
+    if (!user) return null;
 
-      // Find existing leaderboard entry
-      const existingEntry = await Leaderboard.findOne({ userId: user._id });
+    const prevPoints = user.points ?? 0;
+    const newPoints = Math.max(0, prevPoints + points); // never go below 0
+    const newTier = getTierName(newPoints);
+    const targetBadges = computeBadges(newPoints);
+    const prevBadges = user.badges ?? [];
+    const badgesEarned = targetBadges.filter((b) => !prevBadges.includes(b));
 
-      if (existingEntry) {
-        // Update existing entry
-        const previousRank = existingEntry.rank;
-        existingEntry.username = user.name;
-        existingEntry.avatar = user.avatar;
-        existingEntry.tier = user.tier;
-        existingEntry.points = user.points;
-        existingEntry.reportsCount = user.reportsCount;
-        existingEntry.badges = user.badges;
-        existingEntry.previousRank = previousRank;
-        existingEntry.rankChange = previousRank - currentRank;
-        existingEntry.rank = currentRank;
-        existingEntry.updatedAt = new Date();
-        await existingEntry.save();
-      } else {
-        // Create new entry
-        await Leaderboard.create({
-          userId: user._id,
+    // 1. Update user points + tier + badges
+    await User.findByIdAndUpdate(userId, {
+      $set: { points: newPoints, tier: newTier, badges: targetBadges }
+    });
+
+    // 1b. Points history
+    await PointHistory.create({
+      userId,
+      delta: points,
+      reason,
+      totalAfter: newPoints
+    }).catch(() => {});
+
+    // 2. Update ONLY this user's leaderboard entry — not all users
+    await Leaderboard.findOneAndUpdate(
+      { userId },
+      {
+        $set: {
           username: user.name,
           avatar: user.avatar,
-          tier: user.tier,
-          points: user.points,
-          reportsCount: user.reportsCount,
-          badges: user.badges,
-          rank: currentRank,
-          previousRank: null,
-          rankChange: 0
-        });
+          tier: newTier,
+          points: newPoints,
+          reportsCount: user.reportsCount ?? 0,
+          badges: targetBadges,
+          updatedAt: new Date()
+        }
+      },
+      { upsert: true, new: true }
+    );
+
+    console.log(
+      `✅ +${points} pts → user ${userId} (${reason}) | total: ${newPoints} | tier: ${newTier}`
+    );
+    return { newPoints, newTier, badgesEarned };
+  } catch (err) {
+    // Never crash the parent request
+    console.error("⚠️  addPoints error (non-fatal):", err.message);
+    return null;
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// updateLeaderboard — call from a scheduled cron job ONLY, not on every request
+// Recalculates all ranks using a single bulk write
+// ─────────────────────────────────────────────────────────────────────────────
+export const updateLeaderboard = async () => {
+  try {
+    const users = await User.find({})
+      .sort({ points: -1 })
+      .select("_id name avatar tier points reportsCount badges")
+      .lean();
+
+    // ✅ Bulk write — 1 DB round trip instead of N individual saves
+    const bulkOps = users.map((user, idx) => ({
+      updateOne: {
+        filter: { userId: user._id },
+        update: {
+          $set: {
+            username: user.name,
+            avatar: user.avatar,
+            tier: user.tier ?? getTierName(user.points ?? 0),
+            points: user.points ?? 0,
+            reportsCount: user.reportsCount ?? 0,
+            badges: user.badges ?? [],
+            rank: idx + 1,
+            updatedAt: new Date()
+          },
+          $setOnInsert: {
+            previousRank: null,
+            rankChange: 0
+          }
+        },
+        upsert: true
       }
+    }));
+
+    if (bulkOps.length > 0) {
+      await Leaderboard.bulkWrite(bulkOps);
     }
 
-    console.log('✅ Leaderboard updated successfully');
-  } catch (error) {
-    console.error('❌ Leaderboard update error:', error);
+    console.log(`✅ Leaderboard rebuilt — ${users.length} users ranked`);
+  } catch (err) {
+    console.error("❌ updateLeaderboard error:", err.message);
   }
 };
 
-// Get leaderboard with pagination
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/leaderboard
+// ─────────────────────────────────────────────────────────────────────────────
 export const getLeaderboard = async (req, res) => {
   try {
-    const { page = 1, limit = 20, tier } = req.query;
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const skip = (page - 1) * limit;
 
     const filter = {};
-    if (tier) filter.tier = tier;
+    if (req.query.tier) filter.tier = req.query.tier;
 
-    const leaderboard = await Leaderboard.find(filter)
-      .sort({ rank: 1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit)
-      .exec();
+    const [leaderboard, total] = await Promise.all([
+      Leaderboard.find(filter)
+        .sort({ points: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Leaderboard.countDocuments(filter)
+    ]);
 
-    const total = await Leaderboard.countDocuments(filter);
-
-    res.json({
+    return res.json({
       leaderboard,
-      totalPages: Math.ceil(total / limit),
+      total,
       currentPage: page,
-      total
+      totalPages: Math.ceil(total / limit)
     });
-  } catch (error) {
-    console.error('Get leaderboard error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+  } catch (err) {
+    console.error("getLeaderboard error:", err);
+    return res
+      .status(500)
+      .json({ message: "Internal server error", error: err.message });
   }
 };
 
-// Get user rank
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/leaderboard/me — current user rank + nearby players
+// ─────────────────────────────────────────────────────────────────────────────
 export const getUserRank = async (req, res) => {
   try {
     const userId = req.user.userId;
 
-    const userEntry = await Leaderboard.findOne({ userId });
+    const userEntry = await Leaderboard.findOne({ userId }).lean();
     if (!userEntry) {
-      return res.status(404).json({ error: 'User not found in leaderboard' });
+      return res.status(404).json({ message: "User not found in leaderboard" });
     }
 
-    // Get nearby rankings (5 above and 5 below)
     const nearbyRankings = await Leaderboard.find({
-      rank: {
-        $gte: Math.max(1, userEntry.rank - 5),
-        $lte: userEntry.rank + 5
+      points: {
+        $gte: Math.max(0, userEntry.points - 200),
+        $lte: userEntry.points + 200
       }
-    }).sort({ rank: 1 });
+    })
+      .sort({ points: -1 })
+      .limit(11)
+      .lean();
 
-    res.json({
-      user: userEntry,
-      nearbyRankings
-    });
-  } catch (error) {
-    console.error('Get user rank error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    return res.json({ user: userEntry, nearbyRankings });
+  } catch (err) {
+    console.error("getUserRank error:", err);
+    return res
+      .status(500)
+      .json({ message: "Internal server error", error: err.message });
   }
 };
 
-// Get leaderboard stats
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/leaderboard/stats
+// ─────────────────────────────────────────────────────────────────────────────
 export const getLeaderboardStats = async (req, res) => {
   try {
-    const totalUsers = await User.countDocuments();
-    const totalPoints = await User.aggregate([
-      { $group: { _id: null, total: { $sum: '$points' } } }
-    ]);
+    const [totalUsers, pointsAgg, tierDist, topContributors] =
+      await Promise.all([
+        User.countDocuments(),
+        User.aggregate([{ $group: { _id: null, total: { $sum: "$points" } } }]),
+        User.aggregate([{ $group: { _id: "$tier", count: { $sum: 1 } } }]),
+        Leaderboard.find({})
+          .sort({ reportsCount: -1 })
+          .limit(5)
+          .select("username avatar reportsCount tier points")
+          .lean()
+      ]);
 
-    const tierDistribution = await User.aggregate([
-      { $group: { _id: '$tier', count: { $sum: 1 } } }
-    ]);
-
-    const topContributors = await Leaderboard.find({})
-      .sort({ reportsCount: -1 })
-      .limit(5)
-      .select('username avatar reportsCount');
-
-    res.json({
+    return res.json({
       totalUsers,
-      totalPoints: totalPoints[0]?.total || 0,
-      tierDistribution,
+      totalPoints: pointsAgg[0]?.total ?? 0,
+      tierDistribution: tierDist,
       topContributors
     });
-  } catch (error) {
-    console.error('Get leaderboard stats error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-};
-
-// Add points to user (for issue reporting, upvotes, etc.)
-export const addPoints = async (userId, points, reason = 'Unknown') => {
-  try {
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { $inc: { points: points } },
-      { new: true }
-    );
-
-    if (user) {
-      console.log(`Added ${points} points to user ${userId} for ${reason}`);
-      
-      // Update leaderboard
-      await updateLeaderboard();
-      
-      return user.points;
-    }
-  } catch (error) {
-    console.error('Add points error:', error);
+  } catch (err) {
+    console.error("getLeaderboardStats error:", err);
+    return res
+      .status(500)
+      .json({ message: "Internal server error", error: err.message });
   }
 };
 
 export default {
+  addPoints,
   updateLeaderboard,
   getLeaderboard,
   getUserRank,
-  getLeaderboardStats,
-  addPoints
+  getLeaderboardStats
 };

@@ -18,13 +18,17 @@ import {
 // Route imports
 import userRoute from './routes/auth.js';
 import issuesRoute from './routes/issues.js';
+import reportsRoute from './routes/reports.js';
 import leaderboardRoute from './routes/leaderboard.js';
+import ecoRoutesRoute from './routes/routes.js';
 import transportRoute from './routes/transport.js';
 import usersRoute from './routes/users.js';
+import communityRoute from './routes/community.js';
 import organizationRoute from './routes/organization.js';
 import issueSolvedRoute from './routes/issuesolved.js';
 import rankingRoute from './routes/userrank.js';
 import organizationRankRoute from './routes/organizationrank.js';
+import pointsRoute from './routes/points.js';
 import TransportEntryRouter from './routes/TransportEntry.js';
 import TransportQuery from './routes/TransportQuery.js';
 import oauthRoute from './routes/oauth.js';
@@ -85,9 +89,13 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRateLimiter, userRoute);
 app.use('/api/auth', authRateLimiter, oauthRoute);
 app.use('/api/issues', issuesRoute);
+app.use('/api/reports', reportsRoute);
 app.use('/api/leaderboard', leaderboardRoute);
+app.use('/api/routes', ecoRoutesRoute);
 app.use('/api/transport', transportRoute);
 app.use('/api/users', usersRoute);
+app.use('/api/community', communityRoute);
+app.use('/api/points', pointsRoute);
 app.use('/api/organization', organizationRoute);
 app.use('/api/issuesolved', issueSolvedRoute);
 app.use('/api/userrank', rankingRoute);

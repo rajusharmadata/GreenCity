@@ -80,13 +80,12 @@ const userSchema = new mongoose.Schema({
 });
 
 // Pre-save hook to hash password
-userSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
+userSchema.pre('save', async function () {
+  if (!this.isModified('password')) return;
 
   if (this.password) {
     this.password = await bcrypt.hash(this.password, 10);
   }
-  next();
 });
 
 // Method to compare password
@@ -111,11 +110,10 @@ userSchema.methods.recalcTier = function () {
 };
 
 // Update tier before saving if points changed
-userSchema.pre('save', function (next) {
+userSchema.pre('save', async function () {
   if (this.isModified('points')) {
     this.recalcTier();
   }
-  next();
 });
 
 export default mongoose.model('User', userSchema);
