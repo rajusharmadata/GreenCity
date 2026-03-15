@@ -64,24 +64,26 @@ export const registerUser = async (req, res) => {
 
     await user.save();
 
-    // Send OTP email
+    // Send OTP email (never block registration; user can use Resend on verify screen)
+    let emailSent = false;
     try {
       await sendOTPEmail(email, otp, name);
+      emailSent = true;
     } catch (emailError) {
       console.error('Failed to send OTP email:', emailError);
-      if (process.env.NODE_ENV === 'production') {
-        return res.status(500).json({ error: 'Failed to send verification email' });
-      }
     }
 
     res.status(201).json({
-      message: 'User created successfully. Please verify your email with the OTP sent to your email.',
+      message: emailSent
+        ? 'User created successfully. Please verify your email with the OTP sent to your email.'
+        : 'User created. Click "Resend code" on the next screen if you did not receive the email.',
       user: {
         _id: user._id,
         name: user.name,
         email: user.email,
         isEmailVerified: false
       },
+      emailSent,
       // Return OTP in development for testing
       ...(process.env.NODE_ENV !== 'production' && { otp })
     });

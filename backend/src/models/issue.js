@@ -6,6 +6,7 @@ const issueSchema = new mongoose.Schema({
     unique: true,
     sparse: false,
     required: true,
+    index: true,
   },
   title: {
     type: String,
@@ -17,14 +18,15 @@ const issueSchema = new mongoose.Schema({
     type: String,
     required: true,
     enum: [
-      'Waste',
-      'Infrastructure',
-      'Road Hazard',
-      'Vandalism',
-      'Air Quality',
-      'Water',
-      'Noise',
-      'Other',
+      'Garbage & Waste',
+      'Water Pollution',
+      'Air Pollution',
+      'Road & Infrastructure',
+      'Deforestation & Green Cover',
+      'Energy Waste',
+      'Noise & Visual Pollution',
+      'Water Body Damage',
+      'Other Environmental Issue',
     ],
   },
   description: {
@@ -107,8 +109,7 @@ issueSchema.index({ userId: 1 });
 issueSchema.index({ 'coords.lat': 1, 'coords.lng': 1 });
 
 // ── Hook 1: Auto-generate issueCode before validation ─────────────────────────
-// ✅ async function — NO next param, NO next() call
-issueSchema.pre('validate', async function () {
+issueSchema.pre('validate', function () {
   if (!this.issueCode) {
     const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
     const ts   = Date.now().toString(36).toUpperCase();

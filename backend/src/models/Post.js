@@ -15,10 +15,11 @@ const postSchema = new mongoose.Schema(
     imageUrl: { type: String, default: '' },
     filterTag: {
       type: String,
-      enum: ['all', 'near', 'eco-tips', 'reports', 'events'],
+      enum: ['all', 'near', 'eco-tips', 'reports', 'events', 'tips', 'news'],
       default: 'all',
       index: true
     },
+    tags: [String],
     location: {
       lat: { type: Number, default: null },
       lng: { type: Number, default: null },
