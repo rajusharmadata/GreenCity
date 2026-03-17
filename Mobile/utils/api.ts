@@ -10,9 +10,7 @@ const getBaseURL = () => {
 
   // Manually verified IP for this environment
   const MANUAL_IP = '10.229.68.164';
-  const url = `http://10.229.68.164:5000/api`;
-  console.log('[API] Using verified Base URL:', url);
-  return url;
+  return `http://10.229.68.164:5000/api`;
 };
 
 const api = axios.create({
@@ -38,10 +36,7 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401) {
-      // Global logout on unauthorized (token expired)
       await SecureStore.deleteItemAsync('token');
-      // Note: You could trigger a store reset here if needed
-      console.warn('Session expired. Please log in again.');
     }
     return Promise.reject(error);
   }

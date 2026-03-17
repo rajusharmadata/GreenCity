@@ -1,328 +1,503 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, ScrollView,
-  ActivityIndicator, StyleSheet, Alert
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+  StyleSheet,
+  Platform,
+  Alert,
 } from 'react-native';
 import * as Location from 'expo-location';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import api from '../../utils/api';
+import MapView, { Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { findRoutes as findRoutesApi, completeRoute as completeRouteApi } from '../../services/routeService';
+import { useEcoRouteStore } from '../../store/ecoRouteStore';
 
-const MODES = [
-  { id: 'walk', icon: 'walk', label: 'Walk', pts: 20, score: 100, color: '#16a34a', gradient: ['#dcfce7', '#bbf7d0'] as [string, string] },
-  { id: 'cycle', icon: 'bicycle', label: 'Cycle', pts: 15, score: 90, color: '#0ea5e9', gradient: ['#e0f2fe', '#bae6fd'] as [string, string] },
-  { id: 'transit', icon: 'bus', label: 'Transit', pts: 10, score: 70, color: '#f59e0b', gradient: ['#fef9c3', '#fde68a'] as [string, string] },
-  { id: 'drive', icon: 'car', label: 'Drive', pts: 0, score: 20, color: '#6b7280', gradient: ['#f3f4f6', '#e5e7eb'] as [string, string] },
-];
+const ROUTE_COLORS: Record<string, string> = {
+  walk: '#16a34a',
+  cycle: '#0ea5e9',
+  transit: '#f59e0b',
+  drive: '#ef4444',
+};
+
+const MODE_ICONS: Record<string, string> = {
+  walk: 'walk',
+  cycle: 'bicycle',
+  transit: 'bus',
+  drive: 'car',
+};
+
+const MODE_LABELS: Record<string, string> = {
+  walk: 'Walk',
+  cycle: 'Cycle',
+  transit: 'Transit',
+  drive: 'Drive',
+};
+
+const POINTS_BY_MODE: Record<string, number> = {
+  walk: 20,
+  cycle: 15,
+  transit: 10,
+  drive: 0,
+};
+
+interface RouteOption {
+  id: string;
+  mode: string;
+  distanceKm: number;
+  durationMin: number;
+  ecoScore: number;
+  co2SavedKg: number;
+  geometry?: { coordinates?: [number, number][] };
+  polyline?: { latitude: number; longitude: number }[];
+}
+
+function getPolylineCoords(option: RouteOption): { latitude: number; longitude: number }[] {
+  if (option.polyline && option.polyline.length > 0) return option.polyline;
+  const coords = option.geometry?.coordinates;
+  if (!coords?.length) return [];
+  return coords.map(([lng, lat]) => ({ latitude: lat, longitude: lng }));
+}
 
 export default function EcoRoutesScreen() {
-  const [region, setRegion] = useState<any>(null);
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const setActiveJourney = useEcoRouteStore((s) => s.setActiveJourney);
+  const mapRef = useRef<MapView>(null);
+  const locationRef = useRef<{ latitude: number; longitude: number } | null>(null);
+
+  const [userRegion, setUserRegion] = useState<{ latitude: number; longitude: number } | null>(null);
   const [destination, setDestination] = useState('');
   const [loading, setLoading] = useState(false);
-  const [selectedMode, setSelectedMode] = useState('walk');
-  const [routes, setRoutes] = useState<any[]>([]);
-  const [locationName, setLocationName] = useState('Detecting...');
-  const [completing, setCompleting] = useState(false);
+  const [selectedMode, setSelectedMode] = useState<string>('walk');
+  const [routes, setRoutes] = useState<RouteOption[]>([]);
+  const [destinationCoords, setDestinationCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [destinationLabel, setDestinationLabel] = useState('');
+  const [routeError, setRouteError] = useState<string | null>(null);
+  const [navigating, setNavigating] = useState(false);
+  const watchSubRef = useRef<Location.LocationSubscription | null>(null);
+
+  const fromCoords = userRegion ?? locationRef.current;
 
   useEffect(() => {
+    let mounted = true;
     (async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') return;
-        const loc = await Location.getCurrentPositionAsync({});
-        setRegion({
-          latitude: loc.coords.latitude,
-          longitude: loc.coords.longitude,
+        const loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.BestForNavigation,
         });
-        // Reverse geocode for display
-        const rev = await Location.reverseGeocodeAsync({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-        if (rev[0]) setLocationName(rev[0].city || rev[0].district || 'Your Location');
+        const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+        locationRef.current = coords;
+        if (mounted) setUserRegion(coords);
+        const sub = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.BestForNavigation, distanceInterval: 5 },
+          (l) => {
+            const c = { latitude: l.coords.latitude, longitude: l.coords.longitude };
+            locationRef.current = c;
+            if (mounted) setUserRegion(c);
+          }
+        );
+        watchSubRef.current = sub;
       } catch (e) {
-        console.error('[EcoRoutes] location error:', e);
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('[EcoRoutes] location error:', e);
+        }
       }
     })();
+    return () => {
+      mounted = false;
+      watchSubRef.current?.remove();
+      watchSubRef.current = null;
+    };
   }, []);
 
+  const fitMapToRoute = useCallback(() => {
+    if (!mapRef.current || !fromCoords) return;
+    const allCoords = [fromCoords];
+    routes.forEach((r) => {
+      const pts = getPolylineCoords(r);
+      allCoords.push(...pts);
+    });
+    if (destinationCoords) allCoords.push(destinationCoords);
+    if (allCoords.length < 2) return;
+    mapRef.current.fitToCoordinates(allCoords, {
+      edgePadding: { top: 120, right: 24, bottom: 280, left: 24 },
+      animated: true,
+    });
+  }, [fromCoords, routes, destinationCoords]);
+
+  useEffect(() => {
+    if (routes.length > 0 && destinationCoords) fitMapToRoute();
+  }, [routes.length, destinationCoords, fitMapToRoute]);
+
   const findRoutes = async () => {
-    if (!destination.trim() || !region) {
-      Alert.alert('Enter a destination', 'Please type where you want to go.');
+    const toAddress = destination.trim();
+    if (!toAddress) {
+      Alert.alert('Enter destination', 'Please type where you want to go.');
       return;
     }
+    if (!fromCoords) {
+      Alert.alert('Location needed', 'Waiting for your location.');
+      return;
+    }
+    setRouteError(null);
     setLoading(true);
     setRoutes([]);
+    setDestinationCoords(null);
+    setDestinationLabel('');
     try {
-      const geo = await Location.geocodeAsync(destination);
-      if (!geo.length) { Alert.alert('Not Found', 'Could not find that location.'); return; }
-      const target = geo[0];
-      const response = await api.post('/routes/find', {
-        fromLat: region.latitude,
-        fromLng: region.longitude,
-        toLat: target.latitude,
-        toLng: target.longitude,
+      const response = await findRoutesApi({
+        fromLat: fromCoords.latitude,
+        fromLng: fromCoords.longitude,
+        toAddress,
       });
-      const options = response.data?.options || [];
-      if (options.length > 0) {
-        setRoutes(options);
-        setSelectedMode(options[0].mode);
-      } else {
-        Alert.alert('No Routes', 'No routes found for this destination.');
+      const options: RouteOption[] = response.options ?? [];
+      const dest = response.destinationCoords ?? null;
+      const label = response.destinationLabel ?? toAddress;
+      if (options.length === 0) {
+        setRouteError('No routes found for this destination.');
+        return;
       }
+      setRoutes(options);
+      setSelectedMode(options[0].mode);
+      setDestinationCoords(dest);
+      setDestinationLabel(label);
     } catch (e: any) {
-      const msg = e.response?.data?.details || e.response?.data?.error || e.message || 'Failed to find routes.';
+      const msg = (e.response?.data?.error as string) ?? e.message ?? 'Failed to find routes.';
+      setRouteError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const centerOnUser = () => {
+    if (!mapRef.current || !fromCoords) return;
+    mapRef.current.animateToRegion({
+      ...fromCoords,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    });
+  };
+
+  const handleStartEcoJourney = async () => {
+    const route = routes.find((r) => r.mode === selectedMode) ?? routes[0];
+    if (!route || !fromCoords || !destinationCoords) return;
+    setLoading(true);
+    try {
+      const completeRes = await completeRouteApi({
+        mode: route.mode,
+        fromLat: fromCoords.latitude,
+        fromLng: fromCoords.longitude,
+        toLat: destinationCoords.latitude,
+        toLng: destinationCoords.longitude,
+        distanceKm: route.distanceKm,
+        durationMin: route.durationMin,
+      });
+      const pointsEarned = completeRes.pointsEarned ?? POINTS_BY_MODE[route.mode] ?? 0;
+      const polylineCoords = getPolylineCoords(route);
+      const fallbackCoords =
+        polylineCoords.length > 1
+          ? polylineCoords
+          : [fromCoords, destinationCoords];
+      setActiveJourney({
+        route: { mode: route.mode, distanceKm: route.distanceKm, durationMin: route.durationMin },
+        destinationAddress: destinationLabel || destination.trim(),
+        toLat: destinationCoords.latitude,
+        toLng: destinationCoords.longitude,
+        fromLat: fromCoords.latitude,
+        fromLng: fromCoords.longitude,
+        polylineCoords: fallbackCoords,
+      });
+      setNavigating(true);
+      router.push('/eco-route-map');
+    } catch (err: any) {
+      const msg = (err.response?.data?.error as string) ?? err.message ?? 'Could not start journey.';
       Alert.alert('Error', msg);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleStartJourney = async () => {
-    const route = routes.find(r => r.mode === selectedMode) || routes[0];
-    if (!route || !region) return;
-    setCompleting(true);
-    try {
-      const geo = await Location.geocodeAsync(destination);
-      const target = geo[0];
-      await api.post('/routes/complete', {
-        mode: route.mode,
-        fromLat: region.latitude,
-        fromLng: region.longitude,
-        toLat: target?.latitude || 0,
-        toLng: target?.longitude || 0,
-        distanceKm: route.distanceKm,
-        durationMin: route.durationMin,
-      });
-      Alert.alert('Journey Started! 🌿', `You earned ${MODES.find(m => m.id === route.mode)?.pts || 0} eco points!`);
-    } catch (e: any) {
-      Alert.alert('Error', e.response?.data?.error || 'Could not complete route');
-    } finally {
-      setCompleting(false);
-    }
-  };
+  const initialRegion = fromCoords
+    ? {
+        ...fromCoords,
+        latitudeDelta: 0.02,
+        longitudeDelta: 0.02,
+      }
+    : undefined;
 
-  const currentRoute = routes.find(r => r.mode === selectedMode) || routes[0];
-  const currentMode = MODES.find(m => m.id === selectedMode) || MODES[0];
-  const hasMockData = currentRoute?.isMock;
+  if (Platform.OS === 'web') {
+    return (
+      <View style={styles.container}>
+        <View style={styles.webPlaceholder}>
+          <Text style={styles.webTitle}>Eco Routes — use the app on a device for maps.</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <LinearGradient colors={['#14532d', '#16a34a']} style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>Eco Routes</Text>
-          <View style={styles.locationRow}>
-            <Ionicons name="location-sharp" size={14} color="rgba(255,255,255,0.8)" />
-            <Text style={styles.locationText}>{locationName}</Text>
-          </View>
-        </View>
-        <View style={styles.leafIcon}>
-          <Ionicons name="leaf" size={28} color="white" />
-        </View>
-      </LinearGradient>
+      <MapView
+        ref={mapRef}
+        style={StyleSheet.absoluteFillObject}
+        provider={PROVIDER_GOOGLE}
+        initialRegion={initialRegion}
+        showsUserLocation
+        showsMyLocationButton={false}
+        showsCompass
+        followsUserLocation={navigating}
+      >
+        {routes.map((r) => {
+          const coords = getPolylineCoords(r);
+          if (coords.length < 2) return null;
+          const isSelected = r.mode === selectedMode;
+          const hex = ROUTE_COLORS[r.mode] ?? '#6b7280';
+          const strokeColor = isSelected ? hex : hex + '66';
+          const isWalking = r.mode === 'walk';
+          return (
+            <Polyline
+              key={r.id}
+              coordinates={coords}
+              strokeColor={strokeColor}
+              strokeWidth={isSelected ? 5 : 2}
+              lineDashPattern={isWalking ? [8, 4] : undefined}
+              lineCap="round"
+              lineJoin="round"
+              zIndex={isSelected ? 1 : 0}
+            />
+          );
+        })}
+      </MapView>
 
-      {/* Search Bar */}
-      <View style={styles.searchWrap}>
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={20} color="#16a34a" />
+      {/* Floating search card */}
+      <View style={[styles.searchCard, { paddingTop: insets.top + 8 }]}>
+        <View style={styles.searchRow}>
+          <Ionicons name="location-sharp" size={18} color="#16a34a" />
+          <Text style={styles.searchLabel}>My Location (GPS)</Text>
+        </View>
+        <View style={styles.searchRow}>
+          <Ionicons name="navigate" size={18} color="#94a3b8" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Where do you want to go?"
+            placeholder="Destination"
             placeholderTextColor="#94a3b8"
             value={destination}
-            onChangeText={setDestination}
+            onChangeText={(t) => { setDestination(t); setRouteError(null); }}
             onSubmitEditing={findRoutes}
             returnKeyType="search"
           />
           {destination.length > 0 && (
-            <TouchableOpacity onPress={() => { setDestination(''); setRoutes([]); }}>
-              <Ionicons name="close-circle" size={20} color="#cbd5e1" />
+            <TouchableOpacity
+              onPress={() => { setDestination(''); setRoutes([]); setRouteError(null); setDestinationCoords(null); }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="close-circle" size={20} color="#94a3b8" />
             </TouchableOpacity>
           )}
         </View>
-        <TouchableOpacity style={styles.searchBtn} onPress={findRoutes} disabled={loading}>
+        <TouchableOpacity
+          style={[styles.searchSubmit, loading && { opacity: 0.7 }]}
+          onPress={findRoutes}
+          disabled={loading}
+        >
           {loading ? (
             <ActivityIndicator size="small" color="white" />
           ) : (
-            <Ionicons name="arrow-forward" size={22} color="white" />
+            <Ionicons name="arrow-forward" size={20} color="white" />
           )}
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Mode Selector */}
-        <Text style={styles.sectionLabel}>TRAVEL MODE</Text>
-        <View style={styles.modeGrid}>
-          {MODES.map(mode => {
-            const routeData = routes.find(r => r.mode === mode.id);
-            const active = selectedMode === mode.id;
-            return (
-              <TouchableOpacity
-                key={mode.id}
-                style={[styles.modeCard, active && { borderColor: mode.color, borderWidth: 2, backgroundColor: mode.color + '15' }]}
-                onPress={() => setSelectedMode(mode.id)}
-              >
-                <View style={[styles.modeIconWrap, { backgroundColor: active ? mode.color : '#f1f5f9' }]}>
-                  <Ionicons name={mode.icon as any} size={22} color={active ? 'white' : mode.color} />
-                </View>
-                <Text style={[styles.modeLabel, active && { color: mode.color, fontWeight: '900' }]}>{mode.label}</Text>
-                {routeData ? (
-                  <Text style={styles.modeDuration}>{routeData.durationMin}m</Text>
-                ) : (
-                  <Text style={styles.modePts}>+{mode.pts}pts</Text>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+      {/* My Location button */}
+      <TouchableOpacity style={[styles.myLocationBtn, { top: insets.top + 140 }]} onPress={centerOnUser}>
+        <Ionicons name="locate" size={24} color="#16a34a" />
+      </TouchableOpacity>
 
-        {/* Route Card */}
-        {loading ? (
-          <View style={styles.loadingWrap}>
+      {/* Bottom sheet: route options */}
+      <View style={[styles.bottomSheet, { paddingBottom: insets.bottom + 16 }]}>
+        {loading && routes.length === 0 ? (
+          <View style={styles.sheetLoading}>
             <ActivityIndicator size="large" color="#16a34a" />
-            <Text style={styles.loadingText}>Finding eco-friendly routes...</Text>
+            <Text style={styles.sheetLoadingText}>Finding routes...</Text>
           </View>
-        ) : routes.length > 0 && currentRoute ? (
-          <View>
-            {hasMockData && (
-              <View style={styles.mockBanner}>
-                <Ionicons name="information-circle-outline" size={16} color="#d97706" />
-                <Text style={styles.mockText}>Estimated route (offline mode – ORS not reachable)</Text>
-              </View>
-            )}
-            <LinearGradient
-              colors={['#14532d', '#16a34a', '#22c55e']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.routeCard}
+        ) : routes.length > 0 ? (
+          <>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.cardsScroll}
             >
-              <View style={styles.routeHeader}>
-                <View>
-                  <Text style={styles.routeDuration}>{currentRoute.durationMin} min</Text>
-                  <Text style={styles.routeDistance}>{currentRoute.distanceKm} km away</Text>
-                </View>
-                <View style={styles.ecoScoreWrap}>
-                  <Text style={styles.ecoScoreNum}>{currentRoute.ecoScore}</Text>
-                  <Text style={styles.ecoScoreLabel}>ECO SCORE</Text>
-                </View>
-              </View>
-
-              <View style={styles.routeStats}>
-                <View style={styles.routeStat}>
-                  <Ionicons name="leaf-outline" size={16} color="rgba(255,255,255,0.8)" />
-                  <Text style={styles.routeStatText}>{currentRoute.co2SavedKg} kg CO₂ saved</Text>
-                </View>
-                <View style={styles.routeStat}>
-                  <Ionicons name="flash-outline" size={16} color="rgba(255,255,255,0.8)" />
-                  <Text style={styles.routeStatText}>+{currentMode.pts} pts earned</Text>
-                </View>
-              </View>
-
-              <TouchableOpacity
-                style={styles.startBtn}
-                onPress={handleStartJourney}
-                disabled={completing}
-              >
-                {completing ? (
-                  <ActivityIndicator color="#16a34a" />
-                ) : (
-                  <>
-                    <Ionicons name="navigate" size={20} color="#16a34a" />
-                    <Text style={styles.startBtnText}>Start Journey</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </LinearGradient>
-
-            {/* All routes comparison */}
-            <Text style={styles.sectionLabel}>ALL OPTIONS</Text>
-            {routes.map(r => {
-              const m = MODES.find(x => x.id === r.mode);
-              return (
-                <TouchableOpacity
-                  key={r.id}
-                  style={[styles.routeRow, r.mode === selectedMode && { borderColor: m?.color, borderWidth: 2 }]}
-                  onPress={() => setSelectedMode(r.mode)}
-                >
-                  <LinearGradient colors={m?.gradient || ['#f1f5f9', '#e2e8f0']} style={styles.routeRowIcon}>
-                    <Ionicons name={m?.icon as any} size={20} color={m?.color || '#6b7280'} />
-                  </LinearGradient>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.routeRowMode}>{m?.label || r.mode}</Text>
-                    <Text style={styles.routeRowPts}>+{m?.pts || 0} eco pts</Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={styles.routeRowDuration}>{r.durationMin} min</Text>
-                    <Text style={styles.routeRowDist}>{r.distanceKm} km</Text>
-                  </View>
-                  <View style={[styles.ecoScoreBump, { backgroundColor: (m?.color || '#6b7280') + '20', borderColor: m?.color || '#6b7280' }]}>
-                    <Text style={[styles.ecoScoreBumpText, { color: m?.color }]}>{r.ecoScore}</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        ) : !loading && destination.length > 0 ? (
-          <View style={styles.emptyWrap}>
-            <Ionicons name="map-outline" size={56} color="#cbd5e1" />
-            <Text style={styles.emptyTitle}>Ready to find routes!</Text>
-            <Text style={styles.emptyDesc}>Press the search button to find eco-friendly paths to your destination.</Text>
-          </View>
+              {routes.map((r) => {
+                const isSelected = r.mode === selectedMode;
+                const color = ROUTE_COLORS[r.mode] ?? '#6b7280';
+                const icon = MODE_ICONS[r.mode] ?? 'car';
+                const label = MODE_LABELS[r.mode] ?? r.mode;
+                const pts = POINTS_BY_MODE[r.mode] ?? 0;
+                return (
+                  <TouchableOpacity
+                    key={r.id}
+                    style={[
+                      styles.routeCard,
+                      isSelected && { borderColor: '#16a34a', borderWidth: 2, backgroundColor: 'white' },
+                    ]}
+                    onPress={() => setSelectedMode(r.mode)}
+                    activeOpacity={0.9}
+                  >
+                    <View style={[styles.routeCardIcon, { backgroundColor: `${color}20` }]}>
+                      <Ionicons name={icon as any} size={24} color={color} />
+                    </View>
+                    <Text style={styles.routeCardMode}>{label}</Text>
+                    <Text style={styles.routeCardDuration}>{r.durationMin} min</Text>
+                    <Text style={styles.routeCardDistance}>{r.distanceKm} km</Text>
+                    <View style={[styles.ecoBadge, { backgroundColor: `${color}25` }]}>
+                      <Text style={[styles.ecoBadgeText, { color }]}>Eco {r.ecoScore}</Text>
+                    </View>
+                    <Text style={styles.co2Text}>{r.co2SavedKg} kg CO₂ saved</Text>
+                    <View style={styles.ptsChip}>
+                      <Ionicons name="flash" size={12} color="#b45309" />
+                      <Text style={styles.ptsChipText}>+{pts} pts</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <TouchableOpacity
+              style={[styles.startJourneyBtn, loading && { opacity: 0.7 }]}
+              onPress={handleStartEcoJourney}
+              disabled={loading}
+            >
+              <Ionicons name="navigate" size={20} color="white" />
+              <Text style={styles.startJourneyBtnText}>Start Eco Journey</Text>
+            </TouchableOpacity>
+          </>
         ) : (
-          <View style={styles.emptyWrap}>
-            <Ionicons name="leaf-outline" size={56} color="#bbf7d0" />
-            <Text style={styles.emptyTitle}>Plan an eco journey</Text>
-            <Text style={styles.emptyDesc}>Type a destination above to discover the greenest routes.</Text>
-          </View>
+          <Text style={styles.sheetHint}>Enter a destination and search to see eco routes.</Text>
         )}
-        <View style={{ height: 80 }} />
-      </ScrollView>
+      </View>
+
+      {/* Error banner */}
+      {routeError ? (
+        <View style={[styles.errorBanner, { bottom: (insets.bottom || 16) + 180 }]}>
+          <Ionicons name="warning" size={18} color="#b45309" />
+          <Text style={styles.errorBannerText}>{routeError}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
-  header: { paddingTop: 56, paddingBottom: 24, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerTitle: { color: 'white', fontSize: 28, fontWeight: '900' },
-  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  locationText: { color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '600' },
-  leafIcon: { backgroundColor: 'rgba(255,255,255,0.15)', padding: 12, borderRadius: 20 },
-  searchWrap: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginTop: -18, marginBottom: 4 },
-  searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 14, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 6, gap: 10 },
-  searchInput: { flex: 1, fontSize: 16, color: '#111827', fontWeight: '500' },
-  searchBtn: { backgroundColor: '#16a34a', borderRadius: 20, padding: 16, shadowColor: '#16a34a', shadowOpacity: 0.4, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
-  scroll: { flex: 1, paddingHorizontal: 16 },
-  sectionLabel: { fontSize: 10, fontWeight: '800', color: '#94a3b8', letterSpacing: 2, textTransform: 'uppercase', marginTop: 20, marginBottom: 10 },
-  modeGrid: { flexDirection: 'row', gap: 10 },
-  modeCard: { flex: 1, backgroundColor: 'white', borderRadius: 20, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#f1f5f9', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, elevation: 2 },
-  modeIconWrap: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
-  modeLabel: { fontSize: 11, fontWeight: '700', color: '#6b7280' },
-  modeDuration: { fontSize: 11, fontWeight: '800', color: '#16a34a', marginTop: 2 },
-  modePts: { fontSize: 10, color: '#94a3b8', marginTop: 2 },
-  loadingWrap: { alignItems: 'center', paddingVertical: 48, gap: 12 },
-  loadingText: { color: '#94a3b8', fontWeight: '600', fontSize: 14 },
-  mockBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#fef9c3', borderRadius: 14, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#fde047' },
-  mockText: { flex: 1, color: '#92400e', fontSize: 12, fontWeight: '600' },
-  routeCard: { borderRadius: 28, padding: 24, shadowColor: '#16a34a', shadowOpacity: 0.3, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 8 },
-  routeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-  routeDuration: { color: 'white', fontSize: 40, fontWeight: '900' },
-  routeDistance: { color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '600', marginTop: 2 },
-  ecoScoreWrap: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, padding: 14, alignItems: 'center' },
-  ecoScoreNum: { color: 'white', fontSize: 24, fontWeight: '900' },
-  ecoScoreLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 9, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' },
-  routeStats: { flexDirection: 'row', gap: 16, marginBottom: 20 },
-  routeStat: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  routeStatText: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '600' },
-  startBtn: { backgroundColor: 'white', borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  startBtnText: { color: '#16a34a', fontWeight: '900', fontSize: 16, textTransform: 'uppercase', letterSpacing: 1 },
-  routeRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', borderRadius: 20, padding: 14, marginBottom: 10, gap: 12, borderWidth: 1, borderColor: '#f1f5f9', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 },
-  routeRowIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  routeRowMode: { fontSize: 14, fontWeight: '800', color: '#111827' },
-  routeRowPts: { fontSize: 11, color: '#6b7280', fontWeight: '600', marginTop: 2 },
-  routeRowDuration: { fontSize: 15, fontWeight: '900', color: '#111827' },
-  routeRowDist: { fontSize: 11, color: '#9ca3af', fontWeight: '600' },
-  ecoScoreBump: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, alignItems: 'center' },
-  ecoScoreBumpText: { fontSize: 13, fontWeight: '900' },
-  emptyWrap: { alignItems: 'center', paddingVertical: 48, gap: 10 },
-  emptyTitle: { fontSize: 18, fontWeight: '900', color: '#374151' },
-  emptyDesc: { color: '#9ca3af', textAlign: 'center', fontSize: 14, lineHeight: 20, paddingHorizontal: 20 },
+  container: { flex: 1 },
+  webPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  webTitle: { fontSize: 16, color: '#6b7280' },
+  searchCard: {
+    position: 'absolute',
+    top: 0,
+    left: 16,
+    right: 16,
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
+  searchLabel: { fontSize: 14, fontWeight: '700', color: '#111827', flex: 1 },
+  searchInput: { flex: 1, fontSize: 16, color: '#111827', paddingVertical: 4 },
+  searchSubmit: {
+    position: 'absolute',
+    right: 14,
+    top: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#16a34a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  myLocationBtn: {
+    position: 'absolute',
+    right: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'white',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  bottomSheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'white',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 8,
+    maxHeight: 220,
+  },
+  sheetLoading: { alignItems: 'center', paddingVertical: 24, gap: 12 },
+  sheetLoadingText: { fontSize: 14, color: '#6b7280', fontWeight: '600' },
+  cardsScroll: { paddingHorizontal: 16, gap: 12, flexDirection: 'row', paddingBottom: 12 },
+  routeCard: {
+    width: 160,
+    backgroundColor: '#f8fafc',
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  routeCardIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  routeCardMode: { fontSize: 15, fontWeight: '800', color: '#111827' },
+  routeCardDuration: { fontSize: 18, fontWeight: '900', color: '#16a34a', marginTop: 2 },
+  routeCardDistance: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+  ecoBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginTop: 6 },
+  ecoBadgeText: { fontSize: 11, fontWeight: '800' },
+  co2Text: { fontSize: 11, color: '#6b7280', marginTop: 4 },
+  ptsChip: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  ptsChipText: { fontSize: 11, fontWeight: '800', color: '#b45309' },
+  startJourneyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#16a34a',
+    marginHorizontal: 16,
+    padding: 16,
+    borderRadius: 16,
+  },
+  startJourneyBtnText: { color: 'white', fontSize: 16, fontWeight: '900' },
+  sheetHint: { textAlign: 'center', color: '#94a3b8', fontSize: 14, paddingVertical: 24 },
+  errorBanner: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fef9c3',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#fde047',
+  },
+  errorBannerText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#92400e' },
 });

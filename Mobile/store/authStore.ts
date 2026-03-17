@@ -1,13 +1,20 @@
 import { create } from 'zustand';
 
-interface User {
+export interface User {
   _id: string;
   name: string;
   email: string;
-  points: number;
-  reportsCount: number;
-  badges: string[];
   avatar?: string;
+  bio?: string;
+  location?: string;
+  tier: string;
+  points: number;
+  rank: number;
+  badges: string[];
+  reportsCount: number;
+  resolvedCount: number;
+  isEmailVerified: boolean;
+  createdAt?: string;
 }
 
 interface AuthStore {

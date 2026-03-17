@@ -1,31 +1,40 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import api from '../../utils/api';
 import * as SecureStore from 'expo-secure-store';
 import { useAuthStore } from '../../store/authStore';
-import "../../global.css";
+import { AuthContainer } from '../../components/auth/AuthContainer';
+import { AuthInput } from '../../components/auth/AuthInput';
+import { ButtonWithLoader } from '../../components/auth/ButtonWithLoader';
+import '../../global.css';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const setUser = useAuthStore(state => state.setUser);
+  const setUser = useAuthStore((state) => state.setUser);
 
   const handleLogin = async () => {
-    if (!email || !password) return alert("Please fill all fields");
+    if (!email?.trim() || !password) {
+      return alert('Please fill all fields');
+    }
     setLoading(true);
     try {
-      const response = await api.post('/auth/login', { email, password });
-      const { user, token } = response.data;
-      
+      const response = await api.post('/auth/login', { email: email.trim(), password });
+      const { user, token } = response.data.data;
       await SecureStore.setItemAsync('token', token);
       setUser(user, token);
-      
+
       router.replace('/(tabs)');
     } catch (error: any) {
-      const msg = error.response?.data?.message || error.response?.data?.error || (error.message === "Network Error" ? "Network Error: Cannot reach backend. check if backend is running on your computer's IP." : "Login failed");
+      const msg =
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        (error.message === 'Network Error'
+          ? "Cannot reach server. Check that the backend is running and you're on the same network."
+          : 'Login failed');
       alert(msg);
     } finally {
       setLoading(false);
@@ -33,48 +42,45 @@ export default function LoginScreen() {
   };
 
   return (
-    <ScrollView className="flex-1 bg-background p-6">
-      <View className="mt-20">
-        <Text className="text-4xl font-bold text-primary-dark mb-2">Welcome Back 👋</Text>
-        <Text className="text-gray-600 mb-10 text-lg">Log in to continue your green mission.</Text>
-        
-        <View className="space-y-4">
-          <View>
-            <Text className="text-primary-dark font-semibold mb-2">Email Address</Text>
-            <TextInput 
-              className="bg-white border border-primary-light p-4 rounded-2xl"
-              placeholder="elon@mars.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={email}
-              onChangeText={setEmail}
-            />
-          </View>
+    <AuthContainer
+      title="Welcome back"
+      subtitle="Log in to continue your green mission."
+    >
+      <AuthInput
+        label="Email"
+        placeholder="you@example.com"
+        value={email}
+        onChangeText={setEmail}
+        keyboardType="email-address"
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+      <AuthInput
+        label="Password"
+        placeholder="••••••••"
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+      />
 
-          <View>
-            <Text className="text-primary-dark font-semibold mb-2">Password</Text>
-            <TextInput 
-              className="bg-white border border-primary-light p-4 rounded-2xl"
-              placeholder="••••••••"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
-          </View>
-
-          <TouchableOpacity 
-            className={`bg-primary p-5 rounded-2xl mt-6 shadow-lg ${loading ? 'opacity-50' : ''}`}
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            <Text className="text-white text-center font-bold text-lg">Login</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={() => router.push('/register')}>
-            <Text className="text-center text-primary-dark mt-4">Don't have an account? Sign Up</Text>
-          </TouchableOpacity>
-        </View>
+      <View className="mt-6">
+        <ButtonWithLoader
+          onPress={handleLogin}
+          loading={loading}
+          disabled={loading}
+          label="Log in"
+        />
       </View>
-    </ScrollView>
+
+      <TouchableOpacity
+        onPress={() => router.push('/register')}
+        className="mt-6 py-3 items-center"
+        activeOpacity={0.7}
+      >
+        <Text className="text-primary-dark font-medium">
+          Don't have an account? <Text className="font-semibold">Sign up</Text>
+        </Text>
+      </TouchableOpacity>
+    </AuthContainer>
   );
 }

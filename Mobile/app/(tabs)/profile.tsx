@@ -44,8 +44,9 @@ export default function ProfileScreen() {
   const refreshUser = async () => {
     try {
       const res = await api.get('/auth/me');
-      setUser(res.data, token);
-      setReportsCount(res.data.reportsCount || 0);
+      const userData = res.data.data.user;
+      setUser(userData, token);
+      setReportsCount(userData.reportsCount || 0);
     } catch (e) {
       console.error('profile refresh error', e);
     } finally {
@@ -82,8 +83,8 @@ export default function ProfileScreen() {
       const response = await api.post('/auth/profile/avatar', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      if (response.data?.avatar && user) {
-        setUser({ ...user, avatar: response.data.avatar }, token);
+      if (response.data?.data?.user) {
+        setUser(response.data.data.user, token);
         Alert.alert('✅ Updated', 'Profile photo updated!');
       }
     } catch (e: any) {

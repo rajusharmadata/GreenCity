@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Animated } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import api from '../../utils/api';
-import "../../global.css";
+import { AuthContainer } from '../../components/auth/AuthContainer';
+import { AuthInput } from '../../components/auth/AuthInput';
+import { ButtonWithLoader } from '../../components/auth/ButtonWithLoader';
+import '../../global.css';
 
 export default function RegisterScreen() {
   const [name, setName] = useState('');
@@ -12,71 +15,83 @@ export default function RegisterScreen() {
   const router = useRouter();
 
   const handleRegister = async () => {
-    if (!name || !email || !password) return alert("Please fill all fields");
+    if (!name?.trim() || !email?.trim() || !password) {
+      return alert('Please fill all fields');
+    }
+    if (password.length < 6) {
+      return alert('Password must be at least 6 characters');
+    }
     setLoading(true);
     try {
-      await api.post('/auth/register', { name, email, password });
-      router.push({ pathname: '/verify-email', params: { email } });
+      const response = await api.post('/auth/register', {
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        password,
+      });
+      const emailForVerify = (response.data?.data?.user?.email || email.trim()).toString();
+
+      router.push({
+        pathname: '/verify-email',
+        params: { email: emailForVerify },
+      });
     } catch (error: any) {
-      alert(error.response?.data?.message || error.response?.data?.error || "Registration failed");
+      const msg =
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        'Registration failed. Check your details and try again.';
+      alert(msg);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <ScrollView className="flex-1 bg-background p-6">
-      <View className="mt-20">
-        <Text className="text-4xl font-bold text-primary-dark mb-2">Join GreenCity 🌿</Text>
-        <Text className="text-gray-600 mb-10 text-lg">Start your eco-friendly journey today.</Text>
-        
-        <View className="space-y-4">
-          <View>
-            <Text className="text-primary-dark font-semibold mb-2">Full Name</Text>
-            <TextInput 
-              className="bg-white border border-primary-light p-4 rounded-2xl"
-              placeholder="Elon Musk"
-              value={name}
-              onChangeText={setName}
-            />
-          </View>
+    <AuthContainer
+      title="Create account"
+      subtitle="Start your eco-friendly journey today."
+    >
+      <AuthInput
+        label="Full name"
+        placeholder="Your name"
+        value={name}
+        onChangeText={setName}
+        autoCapitalize="words"
+      />
+      <AuthInput
+        label="Email"
+        placeholder="you@example.com"
+        value={email}
+        onChangeText={setEmail}
+        keyboardType="email-address"
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+      <AuthInput
+        label="Password (min 6 characters)"
+        placeholder="••••••••"
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+      />
 
-          <View>
-            <Text className="text-primary-dark font-semibold mb-2">Email Address</Text>
-            <TextInput 
-              className="bg-white border border-primary-light p-4 rounded-2xl"
-              placeholder="elon@mars.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={email}
-              onChangeText={setEmail}
-            />
-          </View>
-
-          <View>
-            <Text className="text-primary-dark font-semibold mb-2">Password</Text>
-            <TextInput 
-              className="bg-white border border-primary-light p-4 rounded-2xl"
-              placeholder="••••••••"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
-          </View>
-
-          <TouchableOpacity 
-            className={`bg-primary p-5 rounded-2xl mt-6 shadow-lg ${loading ? 'opacity-50' : ''}`}
-            onPress={handleRegister}
-            disabled={loading}
-          >
-            <Text className="text-white text-center font-bold text-lg">Create Account</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={() => router.push('/login')}>
-            <Text className="text-center text-primary-dark mt-4">Already have an account? Login</Text>
-          </TouchableOpacity>
-        </View>
+      <View className="mt-6">
+        <ButtonWithLoader
+          onPress={handleRegister}
+          loading={loading}
+          disabled={loading}
+          label="Create account"
+        />
       </View>
-    </ScrollView>
+
+      <TouchableOpacity
+        onPress={() => router.push('/login')}
+        className="mt-6 py-3 items-center"
+        activeOpacity={0.7}
+      >
+        <Text className="text-primary-dark font-medium">
+          Already have an account? <Text className="font-semibold">Log in</Text>
+        </Text>
+      </TouchableOpacity>
+    </AuthContainer>
   );
 }

@@ -1,148 +1,145 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView, Image,
   ActivityIndicator, Modal, StyleSheet, Alert, RefreshControl
 } from 'react-native';
-import * as Location from 'expo-location';
-import api from '../../utils/api';
 import CameraCapture from '../../components/CameraCapture';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useAuthStore } from '../../store/authStore';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { useLocation } from '../../hooks/useLocation';
+import { useCamera } from '../../hooks/useCamera';
+import { usePoints } from '../../hooks/usePoints';
+import { submitReport, fetchMyReports as fetchMyReportsApi } from '../../services/reportService';
+import { colors } from '../../theme';
 
 const STATUS_COLOR: Record<string, { bg: string; text: string }> = {
-  Pending: { bg: '#fef9c3', text: '#b45309' },
-  'In Progress': { bg: '#dbeafe', text: '#1d4ed8' },
-  Resolved: { bg: '#dcfce7', text: '#15803d' },
+  Pending: colors.status.Pending,
+  'In Progress': colors.status['In Progress'],
+  Resolved: colors.status.Resolved,
 };
-const SEV_COLOR: Record<string, string> = {
-  Critical: '#dc2626', High: '#d97706', Medium: '#2563eb', Low: '#16a34a'
-};
+const SEV_COLOR: Record<string, string> = colors.severity as Record<string, string>;
 
 export default function ReportScreen() {
   const router = useRouter();
-  const [showCamera, setShowCamera] = useState(false);
-  const [photo, setPhoto] = useState<string | null>(null);
+  const { location, address, refresh: refreshLocation, getCurrentForSubmit, getAddressForCoords } = useLocation();
+  const { showCamera, photo, openCamera, closeCamera, onCapture, clearPhoto } = useCamera();
+  const { updatePoints } = usePoints();
   const [loading, setLoading] = useState(false);
-  const [location, setLocation] = useState<Location.LocationObject | null>(null);
-  const [address, setAddress] = useState('');
   const [aiResult, setAiResult] = useState<any>(null);
   const [myReports, setMyReports] = useState<any[]>([]);
   const [reportsLoading, setReportsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const updatePoints = useAuthStore(state => state.updatePoints);
 
-  const fetchLocation = async () => {
+  const fetchMyReports = useCallback(async () => {
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      setLocation(loc);
-      const reverse = await Location.reverseGeocodeAsync({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-      if (reverse[0]) {
-        const addr = reverse[0];
-        setAddress(`${addr.streetNumber || ''} ${addr.street || ''}, ${addr.city || ''}`.trim().replace(/^,/, '').trim() || 'Location detected');
+      const data = await fetchMyReportsApi();
+      setMyReports(data.reports || []);
+    } catch (e) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[Report] fetch my reports error:', e);
       }
-    } catch (e) {
-      console.error('[Report] location error:', e);
-    }
-  };
-
-  const fetchMyReports = async () => {
-    try {
-      const res = await api.get('/reports/my-reports');
-      setMyReports(res.data.reports || []);
-    } catch (e) {
-      console.error('[Report] fetch my reports error:', e);
     } finally {
       setReportsLoading(false);
       setRefreshing(false);
     }
-  };
-
-  useEffect(() => { fetchLocation(); }, []);
+  }, []);
 
   useFocusEffect(useCallback(() => { fetchMyReports(); }, []));
 
   const onRefresh = () => { setRefreshing(true); fetchMyReports(); };
 
-  const handleCapture = (uri: string) => { setPhoto(uri); setShowCamera(false); };
-
   const handleSubmit = async () => {
-    if (!photo || !location) { Alert.alert('Required', 'Photo and location are required.'); return; }
+    if (!photo) { Alert.alert('Required', 'Photo is required.'); return; }
     setLoading(true);
     try {
-      const formData = new FormData();
-      // @ts-ignore
-      formData.append('image', { uri: photo, type: 'image/jpeg', name: 'report.jpg' });
-      formData.append('lat', location.coords.latitude.toString());
-      formData.append('lng', location.coords.longitude.toString());
-      formData.append('address', address);
-
-      const response = await api.post('/reports/submit', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      const exactLoc = await getCurrentForSubmit();
+      if (!exactLoc) {
+        Alert.alert('Location required', 'Please enable location so authorities can find and fix this issue.');
+        setLoading(false);
+        return;
+      }
+      const resolvedAddress = await getAddressForCoords(exactLoc.coords.latitude, exactLoc.coords.longitude) || address || 'Resolving...';
+      const response = await submitReport({
+        imageUri: photo,
+        lat: exactLoc.coords.latitude,
+        lng: exactLoc.coords.longitude,
+        address: resolvedAddress,
       });
-      setAiResult(response.data);
-      updatePoints(response.data.totalPoints);
+      setAiResult(response);
+      if (response.totalPoints != null) updatePoints(response.totalPoints);
       fetchMyReports();
     } catch (e: any) {
-      Alert.alert('Error', e.response?.data?.message || e.response?.data?.error || 'Report submission failed');
+      Alert.alert('Error', e.response?.data?.error ?? e.message ?? 'Report submission failed');
     } finally {
       setLoading(false);
     }
   };
 
-  if (showCamera) return <CameraCapture onCapture={handleCapture} onClose={() => setShowCamera(false)} />;
+  if (showCamera) return <CameraCapture onCapture={onCapture} onClose={closeCamera} />;
 
   return (
     <ScrollView
       style={styles.container}
       showsVerticalScrollIndicator={false}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16a34a" />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
     >
       {/* Header */}
-      <LinearGradient colors={['#14532d', '#16a34a']} style={styles.header}>
-        <Text style={styles.headerTitle}>Report Issue</Text>
-        <Text style={styles.headerSub}>AI-powered environmental reporting</Text>
+      <LinearGradient colors={[colors.primaryDark, colors.primary]} style={styles.header}>
+        <View style={styles.headerContent}>
+          <View>
+            <Text style={styles.headerTitle}>Green Report</Text>
+            <Text style={styles.headerSub}>AI Environmental Guardian</Text>
+          </View>
+          <View style={styles.headerIcon}>
+            <Ionicons name="leaf" size={28} color="white" />
+          </View>
+        </View>
       </LinearGradient>
 
       <View style={styles.content}>
         {/* Location Bar */}
-        <View style={styles.locationBar}>
+        <TouchableOpacity activeOpacity={0.7} onPress={() => refreshLocation()} style={styles.locationCard}>
           <View style={styles.locationIcon}>
-            <Ionicons name="location-sharp" size={20} color="#16a34a" />
+            <Ionicons name="location" size={20} color={colors.primary} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.locationLabel}>DETECTED LOCATION</Text>
+            <Text style={styles.locationLabel}>VERIFIED LOCATION</Text>
             <Text style={styles.locationValue} numberOfLines={1}>
               {address || (location ? 'Resolving address...' : 'Detecting...')}
             </Text>
           </View>
-          <TouchableOpacity onPress={() => { setAddress(''); fetchLocation(); }} style={styles.refreshBtn}>
-            <Ionicons name="refresh" size={18} color="#16a34a" />
-          </TouchableOpacity>
-        </View>
+          <Ionicons name="refresh-circle" size={24} color={colors.primary} />
+        </TouchableOpacity>
 
         {/* Camera Area */}
         {!photo ? (
-          <TouchableOpacity style={styles.cameraTrigger} onPress={() => setShowCamera(true)}>
-            <LinearGradient colors={['#f0fdf4', '#dcfce7']} style={styles.cameraGradient}>
+          <TouchableOpacity style={styles.cameraTrigger} onPress={openCamera} activeOpacity={0.9}>
+            <LinearGradient colors={['#ffffff', '#f0fdf4']} style={styles.cameraGradient}>
               <View style={styles.cameraInner}>
-                <Ionicons name="camera" size={52} color="#16a34a" />
-                <Text style={styles.cameraTitle}>Tap to Capture</Text>
-                <Text style={styles.cameraSubtitle}>AI will analyze the issue instantly</Text>
+                <View style={styles.cameraIconContainer}>
+                  <Ionicons name="camera" size={48} color={colors.primary} />
+                  <View style={styles.cameraBadge}>
+                    <Ionicons name="sparkles" size={14} color="white" />
+                  </View>
+                </View>
+                <Text style={styles.cameraTitle}>Capture Issue</Text>
+                <Text style={styles.cameraSubtitle}>Point, shoot, and let AI do the rest</Text>
               </View>
             </LinearGradient>
           </TouchableOpacity>
         ) : (
           <View style={styles.photoContainer}>
             <Image source={{ uri: photo }} style={styles.photo} resizeMode="cover" />
-            <TouchableOpacity style={styles.overlayClose} onPress={() => setPhoto(null)}>
-              <Ionicons name="close" size={22} color="white" />
+            <LinearGradient
+              colors={['transparent', 'rgba(0,0,0,0.6)']}
+              style={styles.photoOverlay}
+            />
+            <TouchableOpacity style={styles.overlayClose} onPress={clearPhoto}>
+              <Ionicons name="close" size={20} color="white" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.retakeBtn} onPress={() => setShowCamera(true)}>
-              <Ionicons name="camera-reverse-outline" size={18} color="#16a34a" />
+            <TouchableOpacity style={styles.retakeBtn} onPress={openCamera}>
+              <Ionicons name="camera-reverse" size={18} color={colors.primary} />
               <Text style={styles.retakeBtnText}>Retake</Text>
             </TouchableOpacity>
           </View>
@@ -151,20 +148,25 @@ export default function ReportScreen() {
         {/* Submit Button */}
         {photo && (
           <TouchableOpacity
-            style={[styles.submitBtn, loading && { opacity: 0.6 }]}
+            style={[styles.submitBtn, loading && { opacity: 0.8 }]}
             onPress={handleSubmit}
             disabled={loading}
           >
-            <LinearGradient colors={['#14532d', '#16a34a']} style={styles.submitGradient}>
+            <LinearGradient 
+              colors={[colors.primary, colors.primaryDark]} 
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.submitGradient}
+            >
               {loading ? (
                 <>
-                  <ActivityIndicator color="white" />
-                  <Text style={styles.submitText}>Analyzing with AI...</Text>
+                  <ActivityIndicator color="white" size="small" />
+                  <Text style={styles.submitText}>AI is analyzing...</Text>
                 </>
               ) : (
                 <>
-                  <Ionicons name="sparkles" size={22} color="white" />
-                  <Text style={styles.submitText}>Analyze & Submit</Text>
+                  <Ionicons name="cloud-upload" size={22} color="white" />
+                  <Text style={styles.submitText}>Submit Report</Text>
                 </>
               )}
             </LinearGradient>
@@ -172,156 +174,191 @@ export default function ReportScreen() {
         )}
 
         {/* My Reports */}
-        <View style={styles.myReportsHeader}>
-          <Text style={styles.myReportsTitle}>My Reports</Text>
-          <Text style={styles.myReportsCount}>{myReports.length} submitted</Text>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Previous Contributions</Text>
+          <View style={styles.countBadge}>
+            <Text style={styles.countText}>{myReports.length}</Text>
+          </View>
         </View>
 
         {reportsLoading ? (
-          <ActivityIndicator color="#16a34a" style={{ marginTop: 16 }} />
+          <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />
         ) : myReports.length === 0 ? (
-          <View style={styles.emptyReports}>
-            <Ionicons name="document-text-outline" size={40} color="#cbd5e1" />
-            <Text style={styles.emptyReportsText}>No reports yet. Be the change!</Text>
+          <View style={styles.emptyContainer}>
+            <Ionicons name="document-text" size={48} color={colors.textLight} />
+            <Text style={styles.emptyText}>No reports yet. Start reporting to earn points!</Text>
           </View>
         ) : (
-          myReports.map(report => {
-            const statusStyle = STATUS_COLOR[report.status] || STATUS_COLOR.Pending;
-            const sevColor = SEV_COLOR[report.ai?.severity] || '#6b7280';
-            return (
-              <TouchableOpacity
-                key={report._id}
-                style={styles.reportCard}
-                onPress={() => router.push({ pathname: '/report-detail', params: { id: report._id } })}
-                activeOpacity={0.8}
-              >
-                <View style={styles.reportCardInner}>
+          <View style={styles.reportsList}>
+            {myReports.map(report => {
+              const statusStyle = STATUS_COLOR[report.status] || STATUS_COLOR.Pending;
+              const sevColor = SEV_COLOR[report.ai?.severity] || colors.textMuted;
+              return (
+                <TouchableOpacity
+                  key={report._id}
+                  style={styles.reportCard}
+                  onPress={() => router.push(`/report-detail?id=${report._id}`)}
+                  activeOpacity={0.7}
+                >
                   <Image
                     source={{ uri: report.image || 'https://picsum.photos/200/200?random=1' }}
-                    style={styles.reportThumb}
+                    style={styles.reportImage}
                   />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.reportTitle} numberOfLines={1}>{report.title}</Text>
-                    <Text style={styles.reportAddr} numberOfLines={1}>
-                      <Ionicons name="location-outline" size={11} color="#94a3b8" /> {report.address || 'Unknown'}
-                    </Text>
-                    <View style={styles.reportTags}>
-                      <View style={[styles.statusTag, { backgroundColor: statusStyle.bg }]}>
-                        <Text style={[styles.statusText, { color: statusStyle.text }]}>{report.status}</Text>
+                  <View style={styles.reportInfo}>
+                    <View style={styles.reportHeaderRow}>
+                      <Text style={styles.reportCategory} numberOfLines={1}>{report.category}</Text>
+                      <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
+                        <Text style={[styles.statusBadgeText, { color: statusStyle.text }]}>{report.status}</Text>
                       </View>
-                      {report.ai?.severity && (
-                        <View style={[styles.sevTag, { borderColor: sevColor }]}>
-                          <Text style={[styles.sevText, { color: sevColor }]}>{report.ai.severity}</Text>
-                        </View>
-                      )}
+                    </View>
+                    <Text style={styles.reportAddress} numberOfLines={1}>
+                      <Ionicons name="pin" size={10} color={colors.primary} /> {report.address || 'Unknown Location'}
+                    </Text>
+                    <View style={styles.reportFooter}>
+                      <View style={[styles.severityLabel, { borderColor: sevColor }]}>
+                        <View style={[styles.severityDot, { backgroundColor: sevColor }]} />
+                        <Text style={[styles.severityLabelText, { color: sevColor }]}>{report.ai?.severity || 'Normal'}</Text>
+                      </View>
+                      <Text style={styles.reportDate}>{new Date(report.createdAt).toLocaleDateString()}</Text>
                     </View>
                   </View>
-                  <Ionicons name="chevron-forward" size={20} color="#cbd5e1" />
-                </View>
-              </TouchableOpacity>
-            );
-          })
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         )}
       </View>
 
       {/* Success Modal */}
-      <Modal visible={!!aiResult} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <LinearGradient colors={['#f0fdf4', '#dcfce7']} style={styles.modalHeader}>
-              <View style={styles.checkCircle}>
-                <Ionicons name="checkmark-circle" size={52} color="#16a34a" />
-              </View>
-              <Text style={styles.modalTitle}>Report Submitted!</Text>
-              <View style={styles.pointsBubble}>
-                <Ionicons name="flash" size={14} color="#f59e0b" />
-                <Text style={styles.pointsText}>+{aiResult?.pointsEarned || 10} Points Earned</Text>
-              </View>
-            </LinearGradient>
+      <Modal visible={!!aiResult} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <LinearGradient colors={[colors.primaryDark, colors.primary]} style={styles.modalHero}>
+                <View style={styles.successIcon}>
+                  <Ionicons name="checkmark-done" size={40} color="white" />
+                </View>
+                <Text style={styles.modalHeadline}>Great Job!</Text>
+                <Text style={styles.modalSubheadline}>Your report has been received</Text>
+                
+                <View style={styles.rewardCard}>
+                  <Ionicons name="star" size={18} color="#fbbf24" />
+                  <Text style={styles.rewardText}>+{aiResult?.pointsEarned || 10} XP EARNED</Text>
+                </View>
+              </LinearGradient>
 
-            <View style={styles.aiResultCard}>
-              <Text style={styles.aiResultLabel}>AI ANALYSIS</Text>
-              <View style={styles.aiResultRow}>
-                <Text style={styles.aiResultKey}>Category</Text>
-                <Text style={styles.aiResultVal}>{aiResult?.ai?.category || aiResult?.report?.category}</Text>
-              </View>
-              <View style={styles.aiResultRow}>
-                <Text style={styles.aiResultKey}>Severity</Text>
-                <View style={[styles.sevTag, { borderColor: SEV_COLOR[aiResult?.ai?.severity] || '#6b7280' }]}>
-                  <Text style={[styles.sevText, { color: SEV_COLOR[aiResult?.ai?.severity] || '#6b7280' }]}>
-                    {aiResult?.ai?.severity || 'Low'}
+              <View style={styles.aiBreakdown}>
+                <View style={styles.aiTag}>
+                  <Ionicons name="hardware-chip" size={12} color={colors.primary} />
+                  <Text style={styles.aiTagText}>AI ANALYSIS</Text>
+                </View>
+                
+                <View style={styles.aiDetailBox}>
+                  <Text style={styles.aiResultTitle}>{aiResult?.ai?.category || 'Environmental Issue'}</Text>
+                  <Text style={styles.aiResultDescription}>
+                    {aiResult?.ai?.description || 'Your report has been successfully processed by our AI systems.'}
                   </Text>
+                  
+                  <View style={styles.aiStatRow}>
+                    <View style={styles.aiStat}>
+                      <Text style={styles.aiStatLabel}>SEVERITY</Text>
+                      <Text style={[styles.aiStatValue, { color: SEV_COLOR[aiResult?.ai?.severity] || colors.primary }]}>
+                        {aiResult?.ai?.severity || 'Normal'}
+                      </Text>
+                    </View>
+                    <View style={styles.aiStatDivider} />
+                    <View style={styles.aiStat}>
+                      <Text style={styles.aiStatLabel}>CONFIDENCE</Text>
+                      <Text style={styles.aiStatValue}>{( (aiResult?.ai?.confidence || 0.95) * 100).toFixed(0)}%</Text>
+                    </View>
+                  </View>
                 </View>
               </View>
-              {aiResult?.ai?.description && (
-                <Text style={styles.aiResultDesc}>"{aiResult.ai.description}"</Text>
-              )}
-            </View>
 
-            <TouchableOpacity style={styles.awesomeBtn} onPress={() => { setAiResult(null); setPhoto(null); }}>
-              <Text style={styles.awesomeBtnText}>Awesome! 🌿</Text>
-            </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.modalCloseBtn} 
+                onPress={() => { setAiResult(null); clearPhoto(); }}
+              >
+                <Text style={styles.modalCloseBtnText}>Continue</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
 
-      <View style={{ height: 80 }} />
+      <View style={{ height: 100 }} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
-  header: { paddingTop: 56, paddingBottom: 28, paddingHorizontal: 20 },
-  headerTitle: { color: 'white', fontSize: 28, fontWeight: '900' },
-  headerSub: { color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: '500', marginTop: 4 },
-  content: { padding: 16 },
-  locationBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', borderRadius: 20, padding: 14, marginBottom: 16, gap: 10, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  locationIcon: { backgroundColor: '#f0fdf4', padding: 8, borderRadius: 12 },
-  locationLabel: { fontSize: 9, fontWeight: '800', color: '#94a3b8', letterSpacing: 2, textTransform: 'uppercase' },
-  locationValue: { fontSize: 13, fontWeight: '700', color: '#111827', marginTop: 2 },
-  refreshBtn: { padding: 8, backgroundColor: '#f0fdf4', borderRadius: 12 },
-  cameraTrigger: { borderRadius: 28, overflow: 'hidden', marginBottom: 16, borderWidth: 2, borderColor: '#86efac', borderStyle: 'dashed' },
-  cameraGradient: { padding: 40 },
-  cameraInner: { alignItems: 'center', gap: 8 },
-  cameraTitle: { fontSize: 18, fontWeight: '900', color: '#15803d' },
-  cameraSubtitle: { fontSize: 13, color: '#4ade80', fontWeight: '500', textAlign: 'center' },
-  photoContainer: { borderRadius: 28, overflow: 'hidden', marginBottom: 16, position: 'relative' },
-  photo: { width: '100%', height: 260, borderRadius: 28 },
-  overlayClose: { position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(0,0,0,0.5)', padding: 8, borderRadius: 14 },
-  retakeBtn: { position: 'absolute', bottom: 12, left: 12, flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 14, gap: 6 },
-  retakeBtnText: { color: '#16a34a', fontWeight: '700', fontSize: 13 },
-  submitBtn: { borderRadius: 22, overflow: 'hidden', marginBottom: 24 },
-  submitGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 18 },
-  submitText: { color: 'white', fontSize: 17, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.5 },
-  myReportsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  myReportsTitle: { fontSize: 20, fontWeight: '900', color: '#111827' },
-  myReportsCount: { fontSize: 12, fontWeight: '700', color: '#16a34a' },
-  emptyReports: { alignItems: 'center', paddingVertical: 32, gap: 8 },
-  emptyReportsText: { color: '#94a3b8', fontWeight: '600', fontSize: 14 },
-  reportCard: { backgroundColor: 'white', borderRadius: 20, marginBottom: 10, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  reportCardInner: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
-  reportThumb: { width: 64, height: 64, borderRadius: 16, backgroundColor: '#f1f5f9' },
-  reportTitle: { fontSize: 14, fontWeight: '800', color: '#111827' },
-  reportAddr: { fontSize: 11, color: '#9ca3af', fontWeight: '500', marginTop: 3 },
-  reportTags: { flexDirection: 'row', gap: 6, marginTop: 6 },
-  statusTag: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10 },
-  statusText: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase' },
-  sevTag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 1 },
-  sevText: { fontSize: 10, fontWeight: '800' },
-  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
-  modalSheet: { backgroundColor: 'white', borderTopLeftRadius: 40, borderTopRightRadius: 40, overflow: 'hidden' },
-  modalHeader: { alignItems: 'center', padding: 30 },
-  checkCircle: { marginBottom: 10 },
-  modalTitle: { fontSize: 24, fontWeight: '900', color: '#14532d', marginBottom: 8 },
-  pointsBubble: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#fef9c3', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16 },
-  pointsText: { color: '#92400e', fontWeight: '800', fontSize: 14 },
-  aiResultCard: { padding: 20, gap: 10 },
-  aiResultLabel: { fontSize: 10, fontWeight: '800', color: '#94a3b8', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 },
-  aiResultRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  aiResultKey: { color: '#6b7280', fontWeight: '600', fontSize: 14 },
-  aiResultVal: { color: '#111827', fontWeight: '800', fontSize: 14 },
-  aiResultDesc: { color: '#6b7280', fontStyle: 'italic', fontSize: 13, lineHeight: 19, backgroundColor: '#f8fafc', padding: 14, borderRadius: 14 },
-  awesomeBtn: { margin: 16, marginTop: 4, backgroundColor: '#16a34a', borderRadius: 20, padding: 18 },
-  awesomeBtnText: { color: 'white', textAlign: 'center', fontWeight: '900', fontSize: 16 },
+  container: { flex: 1, backgroundColor: colors.background },
+  header: { paddingTop: 60, paddingBottom: 30, paddingHorizontal: 24, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 },
+  headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerTitle: { color: 'white', fontSize: 32, fontWeight: '900', letterSpacing: -0.5 },
+  headerSub: { color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: '600', marginTop: 2 },
+  headerIcon: { width: 50, height: 50, borderRadius: 25, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  content: { padding: 20 },
+  locationCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', borderRadius: 24, padding: 16, marginBottom: 20, gap: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 4 },
+  locationIcon: { width: 40, height: 40, backgroundColor: colors.primaryLight, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  locationLabel: { fontSize: 10, fontWeight: '800', color: colors.textLight, letterSpacing: 1.5 },
+  locationValue: { fontSize: 14, fontWeight: '700', color: colors.text, marginTop: 2 },
+  cameraTrigger: { borderRadius: 32, overflow: 'hidden', marginBottom: 20, shadowColor: colors.primary, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 6 },
+  cameraGradient: { paddingVertical: 40, paddingHorizontal: 20 },
+  cameraInner: { alignItems: 'center' },
+  cameraIconContainer: { marginBottom: 16, position: 'relative' },
+  cameraBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#fbbf24', width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'white' },
+  cameraTitle: { fontSize: 20, fontWeight: '900', color: colors.primaryDark },
+  cameraSubtitle: { fontSize: 14, color: colors.primary, fontWeight: '600', marginTop: 4, opacity: 0.8 },
+  photoContainer: { borderRadius: 32, overflow: 'hidden', marginBottom: 20, position: 'relative', height: 300, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 15, elevation: 8 },
+  photo: { width: '100%', height: '100%' },
+  photoOverlay: { ...StyleSheet.absoluteFillObject },
+  overlayClose: { position: 'absolute', top: 16, right: 16, backgroundColor: 'rgba(0,0,0,0.5)', width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(5px)' },
+  retakeBtn: { position: 'absolute', bottom: 16, left: 16, flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 16, gap: 6 },
+  retakeBtnText: { color: colors.primary, fontWeight: '800', fontSize: 14 },
+  submitBtn: { borderRadius: 24, overflow: 'hidden', marginBottom: 30, shadowColor: colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 6 },
+  submitGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 20 },
+  submitText: { color: 'white', fontSize: 18, fontWeight: '800', letterSpacing: 0.5 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 10 },
+  sectionTitle: { fontSize: 22, fontWeight: '900', color: colors.text },
+  countBadge: { backgroundColor: colors.primary, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  countText: { color: 'white', fontSize: 12, fontWeight: '800' },
+  emptyContainer: { alignItems: 'center', paddingVertical: 40, opacity: 0.5 },
+  emptyText: { color: colors.text, fontWeight: '600', fontSize: 14, marginTop: 12, textAlign: 'center', paddingHorizontal: 40 },
+  reportsList: { gap: 12 },
+  reportCard: { flexDirection: 'row', backgroundColor: 'white', borderRadius: 24, padding: 12, gap: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  reportImage: { width: 80, height: 80, borderRadius: 18, backgroundColor: colors.borderLight },
+  reportInfo: { flex: 1, justifyContent: 'space-between', paddingVertical: 2 },
+  reportHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  reportCategory: { fontSize: 16, fontWeight: '800', color: colors.text, flex: 1, marginRight: 8 },
+  statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
+  statusBadgeText: { fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
+  reportAddress: { fontSize: 12, color: colors.textLight, fontWeight: '600', marginTop: 2 },
+  reportFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 },
+  severityLabel: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2, gap: 4 },
+  severityDot: { width: 6, height: 6, borderRadius: 3 },
+  severityLabelText: { fontSize: 10, fontWeight: '800' },
+  reportDate: { fontSize: 11, color: colors.textLight, fontWeight: '600' },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.8)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalContainer: { width: '100%', maxWidth: 400, borderRadius: 36, overflow: 'hidden' },
+  modalContent: { backgroundColor: 'white' },
+  modalHero: { padding: 40, alignItems: 'center' },
+  successIcon: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  modalHeadline: { color: 'white', fontSize: 28, fontWeight: '900' },
+  modalSubheadline: { color: 'rgba(255,255,255,0.8)', fontSize: 16, fontWeight: '600', marginTop: 4 },
+  rewardCard: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginTop: 24 },
+  rewardText: { color: 'white', fontWeight: '900', fontSize: 14, letterSpacing: 1 },
+  aiBreakdown: { padding: 30 },
+  aiTag: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16 },
+  aiTagText: { color: colors.primary, fontSize: 11, fontWeight: '900', letterSpacing: 2 },
+  aiDetailBox: { backgroundColor: '#f8fafc', borderRadius: 24, padding: 20 },
+  aiResultTitle: { fontSize: 20, fontWeight: '900', color: colors.text, marginBottom: 8 },
+  aiResultDescription: { fontSize: 14, color: colors.textMuted, lineHeight: 22, fontWeight: '500' },
+  aiStatRow: { flexDirection: 'row', alignItems: 'center', marginTop: 20, paddingTop: 20, borderTopWidth: 1, borderTopColor: '#e2e8f0' },
+  aiStat: { flex: 1, alignItems: 'center' },
+  aiStatDivider: { width: 1, height: 30, backgroundColor: '#e2e8f0' },
+  aiStatLabel: { fontSize: 10, fontWeight: '800', color: colors.textLight, marginBottom: 4, letterSpacing: 1 },
+  aiStatValue: { fontSize: 16, fontWeight: '900', color: colors.text },
+  modalCloseBtn: { margin: 30, marginTop: 0, backgroundColor: colors.text, borderRadius: 20, padding: 18 },
+  modalCloseBtnText: { color: 'white', textAlign: 'center', fontWeight: '900', fontSize: 16 },
 });

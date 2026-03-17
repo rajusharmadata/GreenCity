@@ -20,7 +20,8 @@ export default function DashboardScreen() {
     try {
       // 1. Refresh user data for latest points/stats
       const userRes = await api.get('/auth/me');
-      setUser(userRes.data, null); // Keep existing token
+      setUser(userRes.data.data.user, null); // Keep existing token
+
 
       // 2. Fetch latest issues
       const issuesRes = await api.get('/issues?limit=5');
@@ -147,7 +148,7 @@ export default function DashboardScreen() {
             <TouchableOpacity
               key={issue._id}
               className="bg-white p-4 rounded-[32px] mb-4 shadow-sm flex-row items-center border border-gray-50"
-              onPress={() => router.push({ pathname: '/report-detail', params: { id: issue._id } })}
+              onPress={() => router.push(`/report-detail?id=${issue._id}`)}
               activeOpacity={0.8}
             >
               <Image 

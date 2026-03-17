@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Image,
-  TextInput, ActivityIndicator, RefreshControl,
-  Modal, KeyboardAvoidingView, Platform, Alert, StyleSheet
+  ActivityIndicator, RefreshControl,
+  Alert, StyleSheet, Share
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,16 +10,32 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter, useFocusEffect } from 'expo-router';
 import api from '../../utils/api';
 
+// Types and Components
+import { Post, LeaderboardEntry } from '../../types/community';
+import { CreatePostModal } from '../../components/community/CreatePostModal';
+import { CommentModal } from '../../components/community/CommentModal';
+
 export default function CommunityScreen() {
   const router = useRouter();
-  const [posts, setPosts] = useState<any[]>([]);
+  
+  // State with proper types
+  const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  
+  // Modal states
   const [modalVisible, setModalVisible] = useState(false);
   const [newPostText, setNewPostText] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  
+  const [commentModalVisible, setCommentModalVisible] = useState(false);
+  const [activePostForComment, setActivePostForComment] = useState<Post | null>(null);
+  const [commentText, setCommentText] = useState('');
+  
+  const [activeTag, setActiveTag] = useState('all');
+  const [tagList] = useState(['all', 'eco-tips', 'reports', 'events']);
 
   const fetchData = async () => {
     try {
@@ -37,6 +53,19 @@ export default function CommunityScreen() {
     }
   };
 
+  const fetchPostsByTag = async (tag: string) => {
+    setLoading(true);
+    setActiveTag(tag);
+    try {
+      const res = await api.get(`/community/posts?filter=${tag}`);
+      setPosts(res.data.posts || []);
+    } catch (e) {
+      console.error('fetch by tag error', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useFocusEffect(useCallback(() => { fetchData(); }, []));
   const onRefresh = () => { setRefreshing(true); fetchData(); };
 
@@ -47,9 +76,32 @@ export default function CommunityScreen() {
     } catch (e) { console.error('like error', e); }
   };
 
+  const handleShare = async (post: Post) => {
+    try {
+      await Share.share({
+        message: `${post.text}\n\nShared from GreenCity App 🌿`,
+        url: post.imageUrl || undefined,
+      });
+    } catch (e) { console.error('share error', e); }
+  };
+
+  const handleAddComment = async () => {
+    if (!commentText.trim() || !activePostForComment) return;
+    try {
+      await api.post(`/community/posts/${activePostForComment._id}/comment`, { text: commentText });
+      setCommentText('');
+      setCommentModalVisible(false);
+      fetchData();
+      Alert.alert('Commented!', 'Your thought is shared.');
+    } catch (e) { console.error('comment error', e); }
+  };
+
   const pickPostImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'], allowsEditing: true, aspect: [16, 9], quality: 0.7,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, 
+      allowsEditing: true, 
+      aspect: [16, 9], 
+      quality: 0.7,
     });
     if (!result.canceled && result.assets?.length > 0) setSelectedImage(result.assets[0].uri);
   };
@@ -131,6 +183,26 @@ export default function CommunityScreen() {
           )}
         </View>
 
+        {/* Tag Filters */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.tagsScroll}
+          contentContainerStyle={styles.tagsContainer}
+        >
+          {tagList.map(tag => (
+            <TouchableOpacity
+              key={tag}
+              onPress={() => fetchPostsByTag(tag)}
+              style={[styles.tagItem, activeTag === tag && styles.tagItemActive]}
+            >
+              <Text style={[styles.tagText, activeTag === tag && styles.tagTextActive]}>
+                {tag.toUpperCase()}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
         {/* Feed label */}
         <View style={styles.feedLabelRow}>
           <Text style={styles.feedLabel}>ACTIVITY FEED</Text>
@@ -147,7 +219,13 @@ export default function CommunityScreen() {
           </View>
         ) : (
           posts.map(post => (
-            <PostCard key={post._id} post={post} onLike={() => handleLike(post._id)} />
+            <PostCard
+              key={post._id}
+              post={post}
+              onLike={() => handleLike(post._id)}
+              onComment={() => { setActivePostForComment(post); setCommentModalVisible(true); }}
+              onShare={() => handleShare(post)}
+            />
           ))
         )}
 
@@ -161,54 +239,31 @@ export default function CommunityScreen() {
         </LinearGradient>
       </TouchableOpacity>
 
+      {/* Comment Modal */}
+      <CommentModal
+        visible={commentModalVisible}
+        onClose={() => setCommentModalVisible(false)}
+        commentText={commentText}
+        onTextChange={setCommentText}
+        onSubmit={handleAddComment}
+      />
+
       {/* Create Post Modal */}
-      <Modal animationType="slide" transparent visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOuter}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Share with Community 🌿</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Ionicons name="close-circle" size={30} color="#cbd5e1" />
-              </TouchableOpacity>
-            </View>
-
-            <TextInput
-              style={styles.modalInput}
-              placeholder="What's your green mission today?"
-              placeholderTextColor="#94a3b8"
-              multiline
-              value={newPostText}
-              onChangeText={setNewPostText}
-            />
-
-            <TouchableOpacity onPress={pickPostImage} style={styles.imagePickBtn}>
-              {selectedImage ? (
-                <>
-                  <Image source={{ uri: selectedImage }} style={styles.pickedImg} />
-                  <Text style={styles.changeImgText}>Image selected — tap to change</Text>
-                </>
-              ) : (
-                <>
-                  <Ionicons name="image-outline" size={26} color="#16a34a" />
-                  <Text style={styles.addImgText}>Add a photo</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.postBtn, creating && { opacity: 0.6 }]} onPress={handleCreatePost} disabled={creating}>
-              <LinearGradient colors={['#14532d', '#16a34a']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.postBtnGradient}>
-                {creating ? <ActivityIndicator color="white" /> : <Text style={styles.postBtnText}>Share to Community</Text>}
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      <CreatePostModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        newPostText={newPostText}
+        onTextChange={setNewPostText}
+        selectedImage={selectedImage}
+        onPickImage={pickPostImage}
+        onSubmit={handleCreatePost}
+        loading={creating}
+      />
     </View>
   );
 }
 
-function PostCard({ post, onLike }: { post: any; onLike: () => void }) {
+function PostCard({ post, onLike, onComment, onShare }: { post: Post; onLike: () => void; onComment: () => void; onShare: () => void }) {
   return (
     <View style={styles.postCard}>
       {/* Author */}
@@ -246,13 +301,13 @@ function PostCard({ post, onLike }: { post: any; onLike: () => void }) {
             {post.likes?.length || 0}
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.postAction}>
+        <TouchableOpacity style={styles.postAction} onPress={onComment}>
           <View style={styles.actionBubble}>
             <Ionicons name="chatbubble-outline" size={18} color="#9ca3af" />
           </View>
           <Text style={styles.actionCount}>{post.comments?.length || 0}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.postAction, { marginLeft: 'auto' }]}>
+        <TouchableOpacity style={[styles.postAction, { marginLeft: 'auto' }]} onPress={onShare}>
           <View style={styles.actionBubble}>
             <Ionicons name="share-social-outline" size={18} color="#9ca3af" />
           </View>
@@ -281,27 +336,20 @@ const styles = StyleSheet.create({
   lbName: { color: 'white', fontWeight: '800', fontSize: 13 },
   lbTier: { color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: '600', marginTop: 1 },
   lbPts: { color: '#22c55e', fontWeight: '900', fontSize: 14 },
-  feedLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 8 },
+  feedLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 8, marginTop: 16 },
   feedLabel: { fontSize: 10, fontWeight: '800', color: '#94a3b8', letterSpacing: 2, textTransform: 'uppercase' },
   feedCount: { fontSize: 12, fontWeight: '700', color: '#16a34a' },
+  tagsScroll: { paddingHorizontal: 16, marginBottom: 4 },
+  tagsContainer: { gap: 10, paddingRight: 32 },
+  tagItem: { backgroundColor: 'white', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0' },
+  tagItemActive: { backgroundColor: '#16a34a', borderColor: '#16a34a' },
+  tagText: { fontSize: 11, fontWeight: '800', color: '#64748b' },
+  tagTextActive: { color: 'white' },
   emptyFeed: { alignItems: 'center', paddingVertical: 48, gap: 10 },
   emptyFeedTitle: { fontSize: 18, fontWeight: '900', color: '#374151' },
   emptyFeedSub: { color: '#9ca3af', textAlign: 'center', fontSize: 14 },
   fab: { position: 'absolute', bottom: 28, right: 20, borderRadius: 30, shadowColor: '#16a34a', shadowOpacity: 0.5, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 10 },
   fabGradient: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
-  modalOuter: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
-  modalSheet: { backgroundColor: 'white', borderTopLeftRadius: 36, borderTopRightRadius: 36, padding: 24, paddingBottom: 36 },
-  modalHandle: { width: 40, height: 4, backgroundColor: '#e5e7eb', borderRadius: 4, alignSelf: 'center', marginBottom: 16 },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  modalTitle: { fontSize: 20, fontWeight: '900', color: '#111827' },
-  modalInput: { backgroundColor: '#f8fafc', borderRadius: 20, padding: 18, fontSize: 16, color: '#111827', height: 130, textAlignVertical: 'top', marginBottom: 12 },
-  imagePickBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1.5, borderColor: '#e5e7eb', borderStyle: 'dashed', borderRadius: 18, padding: 16, marginBottom: 16 },
-  pickedImg: { width: 52, height: 52, borderRadius: 12 },
-  changeImgText: { color: '#16a34a', fontWeight: '700', flex: 1 },
-  addImgText: { color: '#9ca3af', fontWeight: '600', fontSize: 15 },
-  postBtn: { borderRadius: 20, overflow: 'hidden' },
-  postBtnGradient: { padding: 18, alignItems: 'center' },
-  postBtnText: { color: 'white', fontWeight: '900', fontSize: 16, textTransform: 'uppercase', letterSpacing: 0.5 },
   postCard: { backgroundColor: 'white', marginHorizontal: 16, marginBottom: 12, borderRadius: 24, padding: 18, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 },
   postAuthorRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
   postAvatar: { width: 44, height: 44, borderRadius: 15, backgroundColor: '#f1f5f9' },
