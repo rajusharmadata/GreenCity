@@ -33,6 +33,8 @@ import TransportEntryRouter from './routes/TransportEntry.js';
 import TransportQuery from './routes/TransportQuery.js';
 import oauthRoute from './routes/oauth.js';
 
+import { errorHandler } from './middleware/errorMiddleware.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -105,22 +107,10 @@ app.use('/api/query', TransportQuery);
 
 // 404 handler
 app.use((req, res) => {
-  res.status(404).json({ error: 'Route not found' });
+  res.status(404).json({ success: false, error: 'Route not found' });
 });
 
-// Error handler (production-safe)
-app.use((err, req, res, next) => {
-  console.error('❌ Express error caught:', err.message);
-
-  // Don't crash the server on typical HTTP/Multer errors like 'Payload Too Large' or 'Unexpected end of form'
-  const status = err.status ?? err.statusCode ?? 500;
-  const message = process.env.NODE_ENV === 'production' && status === 500
-    ? 'Internal server error'
-    : (err.message || 'Something went wrong');
-
-  if (!res.headersSent) {
-    res.status(status).json({ error: message, details: err.message });
-  }
-});
+// Use modular error handler
+app.use(errorHandler);
 
 export default app;

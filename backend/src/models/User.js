@@ -12,7 +12,8 @@ const userSchema = new mongoose.Schema({
     required: true,
     unique: true,
     lowercase: true,
-    trim: true
+    trim: true,
+    index: true // Explicit index for performance at scale
   },
   password: {
     type: String,
@@ -35,7 +36,8 @@ const userSchema = new mongoose.Schema({
   googleId: {
     type: String,
     unique: true,
-    sparse: true
+    sparse: true,
+    index: true // Crucial for social login scaling
   },
   isEmailVerified: {
     type: Boolean,
@@ -55,8 +57,8 @@ const userSchema = new mongoose.Schema({
   },
   tier: {
     type: String,
-    enum: ['Green Scout', 'Urban Ranger', 'Eco Guardian', 'City Champion', 'Eco Legend'],
-    default: 'Green Scout'
+    enum: ['Eco Newcomer', 'Green Scout', 'City Guardian', 'Eco Warrior', 'Urban Hero', 'Planet Saviour'],
+    default: 'Eco Newcomer'
   },
   points: {
     type: Number,
@@ -94,20 +96,23 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Method to recalculate tier based on points
+// Method to recalculate tier based on points (Aligned with Frontend)
 userSchema.methods.recalcTier = function () {
-  if (this.points >= 10000) {
-    this.tier = 'Eco Legend';
-  } else if (this.points >= 6000) {
-    this.tier = 'City Champion';
-  } else if (this.points >= 3000) {
-    this.tier = 'Eco Guardian';
-  } else if (this.points >= 1000) {
-    this.tier = 'Urban Ranger';
-  } else {
+  if (this.points >= 3000) {
+    this.tier = 'Planet Saviour';
+  } else if (this.points >= 1500) {
+    this.tier = 'Urban Hero';
+  } else if (this.points >= 700) {
+    this.tier = 'Eco Warrior';
+  } else if (this.points >= 300) {
+    this.tier = 'City Guardian';
+  } else if (this.points >= 100) {
     this.tier = 'Green Scout';
+  } else {
+    this.tier = 'Eco Newcomer';
   }
 };
+
 
 // Update tier before saving if points changed
 userSchema.pre('save', async function () {

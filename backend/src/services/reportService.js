@@ -113,4 +113,12 @@ export async function myReportsLogic(userId) {
   return { reports };
 }
 
-export default { submitReportLogic, myReportsLogic };
+/**
+ * Fetch a single report by ID.
+ */
+export async function getReportByIdLogic(id) {
+  const report = await Issue.findById(id).lean();
+  return { report };
+}
+
+export default { submitReportLogic, myReportsLogic, getReportByIdLogic };

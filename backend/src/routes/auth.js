@@ -12,12 +12,15 @@ import {
 import { authenticate } from '../middleware/auth.js';
 import { uploadSingle } from '../middleware/upload.js';
 
+import { validate, authSchemas } from '../validations/authValidation.js';
+
 const router = express.Router();
 
 // Public routes
-router.post('/register', registerUser);
-router.post('/login', loginUser);           // Mobile uses /login
-router.post('/login-user', loginUser);      // Web uses /login-user (keep for compatibility)
+router.post('/register', validate(authSchemas.register), registerUser);
+router.post('/login', validate(authSchemas.login), loginUser);           // Mobile uses /login
+router.post('/login-user', validate(authSchemas.login), loginUser);      // Web uses /login-user (keep for compatibility)
+
 router.post('/verify-email', verifyEmail);
 router.post('/resend-verification', resendVerificationOTP);
 router.post('/google/mobile', googleMobile); // Mobile Google OAuth token exchange

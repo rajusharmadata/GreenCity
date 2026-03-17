@@ -1,4 +1,4 @@
-import { submitReportLogic, myReportsLogic } from '../services/reportService.js';
+import { submitReportLogic, myReportsLogic, getReportByIdLogic } from '../services/reportService.js';
 
 const ERROR_CODES = {
   VALIDATION: 'VALIDATION',
@@ -68,4 +68,24 @@ export async function myReports(req, res) {
   }
 }
 
-export default { submitReport, myReports };
+/**
+ * GET /api/reports/:id
+ */
+export async function getReportById(req, res) {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return sendError(res, 400, 'Report ID is required.', ERROR_CODES.VALIDATION);
+    }
+    const result = await getReportByIdLogic(id);
+    if (!result.report) {
+      return sendError(res, 404, 'Report not found.', ERROR_CODES.VALIDATION);
+    }
+    return res.json(result);
+  } catch (error) {
+    console.error('getReportById error:', error);
+    return sendError(res, 500, 'Internal server error', ERROR_CODES.SERVER_ERROR);
+  }
+}
+
+export default { submitReport, myReports, getReportById };
