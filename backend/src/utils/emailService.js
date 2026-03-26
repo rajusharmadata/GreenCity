@@ -1,23 +1,91 @@
 import nodemailer from 'nodemailer';
+import dns from 'dns';
+
+// Use the authenticated SMTP user as the sender, falling back to EMAIL_USER.
+// Some providers reject messages when `from` doesn't match the authenticated user.
+const getSenderEmail = () =>
+  process.env.SMTP_USERNAME || process.env.EMAIL_USER || 'noreply@greencity.com';
+
+// Prefer EMAIL_FROM if provided (matches backend/.env.example).
+// Supports both:
+// - `user@domain.com`
+// - `Some Name <user@domain.com>`
+const getFromHeader = () => {
+  const emailFrom = process.env.EMAIL_FROM?.trim();
+  if (!emailFrom) {
+    return `"GreenCity Project" <${getSenderEmail()}>`;
+  }
+  if (emailFrom.includes('<') && emailFrom.includes('>')) {
+    return emailFrom;
+  }
+  return `"GreenCity Project" <${emailFrom}>`;
+};
+
+// Gmail transporter (used as a retry fallback on SMTP connectivity failures)
+const createGmailTransporter = async () => {
+  const gmailUser = process.env.EMAIL_USER || '';
+  const gmailPass = process.env.EMAIL_PASS || '';
+  if (!gmailUser || !gmailPass) return null;
+
+  // Your environment can reach Gmail over IPv6, but IPv4 resolves to an IP that times out.
+  // Force the transport to use the first IPv6 A/AAAA record we can resolve.
+  const gmailHost = 'smtp.gmail.com';
+  const ipv6Addrs = await dns.promises.resolve6(gmailHost).catch(() => []);
+  const hostToConnect = ipv6Addrs[0] || gmailHost;
+
+  return nodemailer.createTransport({
+    host: hostToConnect,
+    port: 587,
+    secure: false, // STARTTLS on 587
+    auth: { user: gmailUser, pass: gmailPass },
+    tls: { servername: gmailHost } // Ensure TLS SNI matches smtp.gmail.com
+  });
+};
+
+const isSmtpTimeoutError = (error) => {
+  const code = error?.code;
+  const msg = String(error?.message || '');
+  return (
+    code === 'ESOCKET' ||
+    code === 'ETIMEDOUT' ||
+    /timed out/i.test(msg) ||
+    /econn(ec|ect|ected)|timeout|etimedout/i.test(msg)
+  );
+};
 
 // Create reusable transporter object using SMTP transport
 const createTransporter = () => {
-  // For production, use environment variables
-  if (process.env.EMAIL_SERVICE && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-    return nodemailer.createTransport({
-      service: process.env.EMAIL_SERVICE, // e.g., 'gmail', 'outlook', 'yahoo'
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
+  // Allow disabling email sending entirely (useful for local dev / when SMTP is blocked)
+  if (String(process.env.EMAIL_SENDING_DISABLED).toLowerCase() === 'true') {
+    return {
+      sendMail: async (options) => {
+        console.log('\n📧 EMAIL DISABLED (dev fallback):');
+        console.log('To:', options.to);
+        console.log('Subject:', options.subject);
+        console.log('Body:', options.text || options.html);
+        console.log('---\n');
+        return { messageId: 'email-disabled-' + Date.now() };
       }
+    };
+  }
+
+  // For production, use environment variables
+  const smtpHost = process.env.SMTP_HOST;
+  const smtpPort = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : undefined;
+  const smtpUser = process.env.SMTP_USERNAME || process.env.EMAIL_USER;
+  const smtpPass = process.env.SMTP_PASSWORD || process.env.EMAIL_PASS;
+
+  if (smtpHost && smtpPort && smtpUser && smtpPass) {
+    return nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465, // 465 is usually secure; 587 typically uses STARTTLS
+      auth: { user: smtpUser, pass: smtpPass }
     });
   }
   
-  // For development/testing, use Ethereal Email (fake SMTP)
-  // Or use a service like Mailtrap, MailHog, etc.
+  // For development/testing, use console logging only
   if (process.env.NODE_ENV === 'development') {
-    // You can use Ethereal Email for testing
-    // For now, we'll use console logging in development
     return {
       sendMail: async (options) => {
         console.log('\n📧 EMAIL (Development Mode):');
@@ -30,26 +98,29 @@ const createTransporter = () => {
     };
   }
   
-  // Fallback: Use Gmail with app password (if configured)
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER || '',
-      pass: process.env.EMAIL_PASS || ''
-    }
-  });
+  // Fallback: Gmail with explicit host/port (prefer 587 over 465)
+  const gmailUser = process.env.EMAIL_USER || '';
+  const gmailPass = process.env.EMAIL_PASS || '';
+  if (gmailUser && gmailPass) {
+    return nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      auth: { user: gmailUser, pass: gmailPass }
+    });
+  }
+
+  // Last resort: do not crash with an empty transporter; throw a clearer error instead.
+  throw new Error('Email transporter is not configured. Set SMTP_HOST/SMTP_PORT/SMTP_USERNAME/SMTP_PASSWORD (or EMAIL_USER/EMAIL_PASS) and ensure network access to SMTP.');
 };
 
 // Send OTP email
 export const sendOTPEmail = async (email, otp, firstName = 'User') => {
-  try {
-    const transporter = createTransporter();
-    
-    const mailOptions = {
-      from: `"GreenCity Project" <${process.env.EMAIL_USER || 'noreply@greencity.com'}>`,
-      to: email,
-      subject: 'Verify Your Email - GreenCity Project',
-      html: `
+  const mailOptions = {
+    from: getFromHeader(),
+    to: email,
+    subject: 'Verify Your Email - GreenCity Project',
+    html: `
         <!DOCTYPE html>
         <html>
         <head>
@@ -76,7 +147,7 @@ export const sendOTPEmail = async (email, otp, firstName = 'User') => {
         </body>
         </html>
       `,
-      text: `
+    text: `
         GreenCity Project - Email Verification
         
         Hello ${firstName},
@@ -91,28 +162,41 @@ export const sendOTPEmail = async (email, otp, firstName = 'User') => {
         
         © ${new Date().getFullYear()} GreenCity Project. All rights reserved.
       `
-    };
-    
+  };
+
+  try {
+    const transporter = createTransporter();
     const info = await transporter.sendMail(mailOptions);
     console.log('✅ OTP email sent:', info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error('❌ Error sending OTP email:', error);
+
+    // Retry with Gmail if SMTP connectivity fails (e.g., wrong SMTP_HOST IP or firewall).
+    const gmailTransporter = await createGmailTransporter();
+    if (gmailTransporter && isSmtpTimeoutError(error)) {
+      try {
+        const info = await gmailTransporter.sendMail(mailOptions);
+        console.log('✅ OTP email sent via Gmail fallback:', info.messageId);
+        return { success: true, messageId: info.messageId };
+      } catch (fallbackError) {
+        console.error('❌ Gmail fallback also failed:', fallbackError);
+      }
+    }
+
     throw new Error('Failed to send verification email');
   }
 };
 
 // Send password reset email (for future use)
 export const sendPasswordResetEmail = async (email, resetToken, firstName = 'User') => {
-  try {
-    const transporter = createTransporter();
-    const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
-    
-    const mailOptions = {
-      from: `"GreenCity Project" <${process.env.EMAIL_USER || 'noreply@greencity.com'}>`,
-      to: email,
-      subject: 'Reset Your Password - GreenCity Project',
-      html: `
+  const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+
+  const mailOptions = {
+    from: getFromHeader(),
+    to: email,
+    subject: 'Reset Your Password - GreenCity Project',
+    html: `
         <!DOCTYPE html>
         <html>
         <head>
@@ -141,13 +225,27 @@ export const sendPasswordResetEmail = async (email, resetToken, firstName = 'Use
         </body>
         </html>
       `
-    };
-    
+  };
+
+  try {
+    const transporter = createTransporter();
     const info = await transporter.sendMail(mailOptions);
     console.log('✅ Password reset email sent:', info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error('❌ Error sending password reset email:', error);
+
+    const gmailTransporter = await createGmailTransporter();
+    if (gmailTransporter && isSmtpTimeoutError(error)) {
+      try {
+        const info = await gmailTransporter.sendMail(mailOptions);
+        console.log('✅ Password reset email sent via Gmail fallback:', info.messageId);
+        return { success: true, messageId: info.messageId };
+      } catch (fallbackError) {
+        console.error('❌ Gmail fallback also failed:', fallbackError);
+      }
+    }
+
     throw new Error('Failed to send password reset email');
   }
 };

@@ -22,11 +22,27 @@ const generateOTP = () => {
 };
 
 export const register = async (userData) => {
-  const { name, email, password } = userData;
+  const { name, email, password, username } = userData;
 
-  const existingUser = await User.findOne({ email: email.trim().toLowerCase() });
-  if (existingUser) {
+  if (!email || !password || !name) {
+    throw new ApiError(400, 'Missing required fields');
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  // Your Mongo collection has a unique index on `username`; default it to email
+  // to avoid inserting `username: null` (E11000 duplicate key).
+  const normalizedUsername = (username && username.trim().length > 0)
+    ? username.trim().toLowerCase()
+    : normalizedEmail;
+
+  const existingEmailUser = await User.findOne({ email: normalizedEmail });
+  if (existingEmailUser) {
     throw new ApiError(400, 'User already exists with this email');
+  }
+
+  const existingUsernameUser = await User.findOne({ username: normalizedUsername });
+  if (existingUsernameUser) {
+    throw new ApiError(400, 'User already exists with this username');
   }
 
   const otp = generateOTP();
@@ -34,8 +50,9 @@ export const register = async (userData) => {
   otpExpiry.setMinutes(otpExpiry.getMinutes() + 10);
 
   const user = new User({
+    username: normalizedUsername,
     name: name.trim(),
-    email: email.trim().toLowerCase(),
+    email: normalizedEmail,
     password,
     emailVerificationOTP: otp,
     emailVerificationOTPExpiry: otpExpiry,
@@ -126,12 +143,14 @@ export const resendOtp = async (email) => {
 };
 
 export const socialAuth = async (googleUser) => {
-  let user = await User.findOne({ email: googleUser.email.toLowerCase() });
+  const normalizedEmail = googleUser.email.toLowerCase().trim();
+  let user = await User.findOne({ email: normalizedEmail });
   
   if (!user) {
     user = new User({
       name: googleUser.name || 'Google User',
-      email: googleUser.email.toLowerCase(),
+      email: normalizedEmail,
+      username: normalizedEmail, // keep Mongo unique index satisfied
       googleId: googleUser.sub,
       avatar: googleUser.picture || '',
       isEmailVerified: true
@@ -139,6 +158,7 @@ export const socialAuth = async (googleUser) => {
     await user.save();
   } else if (!user.googleId) {
     user.googleId = googleUser.sub;
+    if (!user.username) user.username = normalizedEmail;
     if (!user.avatar && googleUser.picture) user.avatar = googleUser.picture;
     user.isEmailVerified = true;
     await user.save();
