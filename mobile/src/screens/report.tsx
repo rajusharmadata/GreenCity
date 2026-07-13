@@ -11,7 +11,7 @@ import { useLocation } from '../hooks/useLocation';
 import { useCamera } from '../hooks/useCamera';
 import { usePoints } from '../hooks/usePoints';
 import { submitReport, fetchMyReports as fetchMyReportsApi } from '../services/reportService';
-import { colors } from '../../theme';
+import { colors } from '../theme';
 
 const STATUS_COLOR: Record<string, { bg: string; text: string }> = {
   Pending: colors.status.Pending,

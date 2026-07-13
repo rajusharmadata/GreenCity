@@ -3,12 +3,12 @@ import {
   View, Text, ScrollView, TouchableOpacity, Image,
   ActivityIndicator, Alert, StyleSheet, RefreshControl
 } from 'react-native';
-import { useAuthStore } from '../../store/authStore';
+import { useAuthStore } from '../store/authStore';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
-import api from '../../utils/api';
+import api from '../utils/api';
 
 const BADGES = [
   { name: 'Green Starter', icon: '🌱', pts: 50, color: '#f0fdf4', border: '#86efac' },

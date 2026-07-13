@@ -7,7 +7,7 @@ import { useAuthStore } from '../../src/store/authStore';
 import { AuthContainer } from '../../src/components/auth/AuthContainer';
 import { AuthInput } from '../../src/components/auth/AuthInput';
 import { ButtonWithLoader } from '../../src/components/auth/ButtonWithLoader';
-import '../../global.css';
+import '../../src/theme/global.css';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');

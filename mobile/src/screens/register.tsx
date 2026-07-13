@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
-import api from '../../utils/api';
+import api from '../utils/api';
 import { AuthContainer } from '../components/auth/AuthContainer';
 import { AuthInput } from '../components/auth/AuthInput';
 import { ButtonWithLoader } from '../components/auth/ButtonWithLoader';
-import '../../global.css';
+import '../theme/global.css';
 
 export default function RegisterScreen() {
   const [name, setName] = useState('');

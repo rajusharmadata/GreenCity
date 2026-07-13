@@ -6,7 +6,7 @@ import * as SecureStore from 'expo-secure-store';
 import { useAuthStore } from '../../src/store/authStore';
 import { AuthContainer } from '../../src/components/auth/AuthContainer';
 import { ButtonWithLoader } from '../../src/components/auth/ButtonWithLoader';
-import '../../global.css';
+import '../../src/theme/global.css';
 
 export default function VerifyEmailScreen() {
   const [otp, setOtp] = useState('');

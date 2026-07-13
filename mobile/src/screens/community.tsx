@@ -8,10 +8,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter, useFocusEffect } from 'expo-router';
-import api from '../../utils/api';
+import api from '../utils/api';
 
 // Types and Components
-import { Post, LeaderboardEntry } from '../../types/community';
+import { Post, LeaderboardEntry } from '../types/community';
 import { CreatePostModal } from '../components/community/CreatePostModal';
 import { CommentModal } from '../components/community/CommentModal';
 

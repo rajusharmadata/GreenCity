@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import api from '../../utils/api';
+import api from '../utils/api';
 import * as SecureStore from 'expo-secure-store';
-import { useAuthStore } from '../../store/authStore';
+import { useAuthStore } from '../store/authStore';
 import { AuthContainer } from '../components/auth/AuthContainer';
 import { ButtonWithLoader } from '../components/auth/ButtonWithLoader';
-import '../../global.css';
+import '../theme/global.css';
 
 export default function VerifyEmailScreen() {
   const [otp, setOtp] = useState('');

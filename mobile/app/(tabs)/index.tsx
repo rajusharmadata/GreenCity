@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import api from '../../src/utils/api';
-import "../../global.css";
+import '../../src/theme/global.css';
 
 const { width } = Dimensions.get('window');
 

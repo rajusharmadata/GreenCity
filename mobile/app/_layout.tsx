@@ -4,7 +4,7 @@ import { useAuthStore } from '../../../src/store/authStore';
 import { useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PermissionHandler from '../../../src/components/PermissionHandler';
-import "../global.css";
+import "../src/theme/global.css";
 
 export default function RootLayout() {
   const { token } = useAuthStore();

@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import MapView, { Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { findRoutes as findRoutesApi, completeRoute as completeRouteApi } from '../services/routeService';
-import { useEcoRouteStore } from '../../store/ecoRouteStore';
+import { useEcoRouteStore } from '../store/ecoRouteStore';
 
 const ROUTE_COLORS: Record<string, string> = {
   walk: '#16a34a',
