@@ -1,3 +1,4 @@
+import passport from 'passport';
 import authService from '../services/authService.js';
 import User from '../models/User.js';
 import Issue from '../models/issue.js';
@@ -12,6 +13,28 @@ import { ApiError } from '../middleware/errorMiddleware.js';
  * Standardizes response format: { success: true, data: { ... } }
  */
 
+const isProd = process.env.NODE_ENV === 'production';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared shaping helper — was previously duplicated 4x (login, verifyEmail,
+// getMe, googleMobile). Any field added/removed now only needs one edit.
+// ─────────────────────────────────────────────────────────────────────────────
+const toPublicUser = (user, extra = {}) => ({
+  _id: user._id,
+  name: user.name,
+  email: user.email,
+  avatar: user.avatar,
+  bio: user.bio,
+  location: user.location,
+  tier: user.tier,
+  points: user.points,
+  rank: user.rank,
+  badges: user.badges,
+  reportsCount: user.reportsCount,
+  isEmailVerified: user.isEmailVerified,
+  ...extra
+});
+
 export const registerUser = asyncHandler(async (req, res) => {
   const { user, otp } = await authService.register(req.body);
 
@@ -25,7 +48,7 @@ export const registerUser = asyncHandler(async (req, res) => {
         email: user.email,
         isEmailVerified: false
       },
-      ...(process.env.NODE_ENV !== 'production' && { otp })
+      ...(!isProd && { otp })
     }
   });
 });
@@ -38,21 +61,7 @@ export const loginUser = asyncHandler(async (req, res) => {
     success: true,
     data: {
       token,
-      user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        avatar: user.avatar,
-        bio: user.bio,
-        location: user.location,
-        tier: user.tier,
-        points: user.points,
-        rank: user.rank,
-        badges: user.badges,
-        reportsCount: user.reportsCount,
-        resolvedCount,
-        isEmailVerified: user.isEmailVerified
-      }
+      user: toPublicUser(user, { resolvedCount })
     }
   });
 });
@@ -66,20 +75,7 @@ export const verifyEmail = asyncHandler(async (req, res) => {
     message: 'Email verified successfully',
     data: {
       token,
-      user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        avatar: user.avatar,
-        bio: user.bio,
-        location: user.location,
-        tier: user.tier,
-        points: user.points,
-        rank: user.rank,
-        badges: user.badges,
-        reportsCount: user.reportsCount,
-        isEmailVerified: true
-      }
+      user: toPublicUser(user, { isEmailVerified: true })
     }
   });
 });
@@ -90,7 +86,7 @@ export const resendVerificationOTP = asyncHandler(async (req, res) => {
     success: true,
     message: 'Verification OTP sent successfully',
     data: {
-      ...(process.env.NODE_ENV !== 'production' && { otp })
+      ...(!isProd && { otp })
     }
   });
 });
@@ -107,22 +103,7 @@ export const getMe = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data: {
-      user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        avatar: user.avatar,
-        bio: user.bio,
-        location: user.location,
-        tier: user.tier,
-        points: user.points,
-        rank: user.rank,
-        badges: user.badges,
-        reportsCount: user.reportsCount,
-        resolvedCount,
-        isEmailVerified: user.isEmailVerified,
-        createdAt: user.createdAt
-      }
+      user: toPublicUser(user, { resolvedCount, createdAt: user.createdAt })
     }
   });
 });
@@ -135,11 +116,15 @@ export const updateProfile = asyncHandler(async (req, res) => {
     const result = await cloudinary.uploader.upload(req.file.path, {
       folder: 'greencity_avatars'
     });
-    await fs.unlink(req.file.path).catch(() => { });
+    await fs.unlink(req.file.path).catch(() => {});
     updateData.avatar = result.secure_url;
   }
 
-  const user = await User.findByIdAndUpdate(userId, updateData, { new: true, runValidators: true }).select('-password');
+  const user = await User.findByIdAndUpdate(userId, updateData, {
+    new: true,
+    runValidators: true
+  }).select('-password');
+
   if (!user) throw new ApiError(404, 'User not found');
 
   res.json({
@@ -153,7 +138,9 @@ export const googleMobile = asyncHandler(async (req, res) => {
   const { accessToken } = req.body;
   if (!accessToken) throw new ApiError(400, 'Access token is required');
 
-  const googleRes = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${accessToken}`);
+  const googleRes = await fetch(
+    `https://www.googleapis.com/oauth2/v3/userinfo?access_token=${accessToken}`
+  );
   if (!googleRes.ok) throw new ApiError(401, 'Invalid Google access token');
 
   const googleUser = await googleRes.json();
@@ -163,20 +150,7 @@ export const googleMobile = asyncHandler(async (req, res) => {
     success: true,
     data: {
       token,
-      user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        avatar: user.avatar,
-        bio: user.bio,
-        location: user.location,
-        tier: user.tier,
-        points: user.points,
-        rank: user.rank,
-        badges: user.badges,
-        reportsCount: user.reportsCount,
-        isEmailVerified: user.isEmailVerified
-      }
+      user: toPublicUser(user)
     }
   });
 });
@@ -186,13 +160,19 @@ export const deleteAccount = asyncHandler(async (req, res) => {
   res.json({ success: true, message: 'Account deleted successfully' });
 });
 
+// NOTE: this one stays a plain middleware (not asyncHandler) since it drives
+// passport's own callback-style flow rather than returning a JSON response.
 export const googleCallback = (req, res, next) => {
   passport.authenticate('google', { session: false }, (err, user, info) => {
     if (err) {
-      return res.redirect(`${process.env.CLIENT_URL}/auth/callback?error=${encodeURIComponent(err.message)}`);
+      return res.redirect(
+        `${process.env.CLIENT_URL}/auth/callback?error=${encodeURIComponent(err.message)}`
+      );
     }
     if (!user) {
-      return res.redirect(`${process.env.CLIENT_URL}/auth/callback?error=${encodeURIComponent('Authentication failed')}`);
+      return res.redirect(
+        `${process.env.CLIENT_URL}/auth/callback?error=${encodeURIComponent('Authentication failed')}`
+      );
     }
 
     const token = authService.generateToken(user._id);
@@ -211,4 +191,3 @@ export default {
   googleMobile,
   googleCallback
 };
-

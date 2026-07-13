@@ -1,28 +1,25 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 
-// Verify JWT token
+const extractToken = (req) => req.header('Authorization')?.replace('Bearer ', '');
+
+const toReqUser = (user) => ({
+  userId: user._id.toString(),
+  email: user.email,
+  role: user.role || 'user'
+});
+
+// Verify JWT token — required for protected routes
 export const authenticate = async (req, res, next) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-
-    if (!token) {
-      return res.status(401).json({ error: 'No token provided' });
-    }
+    const token = extractToken(req);
+    if (!token) return res.status(401).json({ error: 'No token provided' });
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.userId).select('-password');
+    if (!user) return res.status(401).json({ error: 'User not found' });
 
-    if (!user) {
-      return res.status(401).json({ error: 'User not found' });
-    }
-
-    req.user = {
-      userId: user._id.toString(),
-      email: user.email,
-      role: user.role || 'user'
-    };
-
+    req.user = toReqUser(user);
     next();
   } catch (error) {
     if (error.name === 'JsonWebTokenError') {
@@ -36,35 +33,27 @@ export const authenticate = async (req, res, next) => {
   }
 };
 
-// Check if user is admin
+// Require admin role — use after `authenticate` in the middleware chain
 export const isAdmin = (req, res, next) => {
-  if (req.user.role !== 'admin') {
+  if (req.user?.role !== 'admin') {
     return res.status(403).json({ error: 'Admin access required' });
   }
   next();
 };
 
-// Optional authentication (for public routes that can benefit from user context)
+// Attaches req.user if a valid token is present, but never blocks the
+// request — for public routes that can optionally use user context
 export const optionalAuth = async (req, res, next) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-
+    const token = extractToken(req);
     if (token) {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const user = await User.findById(decoded.userId).select('-password');
-
-      if (user) {
-        req.user = {
-          userId: user._id.toString(),
-          email: user.email,
-          role: user.role || 'user'
-        };
-      }
+      if (user) req.user = toReqUser(user);
     }
-
     next();
   } catch (error) {
-    // Continue without authentication for optional routes
+    // Silently continue unauthenticated — this route doesn't require a token
     next();
   }
 };
