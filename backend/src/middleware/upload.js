@@ -6,56 +6,42 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const isProd = process.env.NODE_ENV === 'production';
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Configure storage
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadsDir);
-  },
-  filename: function (req, file, cb) {
-    console.log('Multer processing file:', file.originalname);
-    // Generate unique filename
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+  destination: (req, file, cb) => cb(null, uploadsDir),
+  filename: (req, file, cb) => {
+    if (!isProd) console.log('Multer processing file:', file.originalname);
+
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
     const ext = path.extname(file.originalname);
-    const filename = file.fieldname + '-' + uniqueSuffix + ext;
-    cb(null, filename);
+    cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
   }
 });
 
-// File filter for images only
 const fileFilter = (req, file, cb) => {
-  console.log('Multer file filter checking:', file.mimetype);
-  // Allow only images
   if (file.mimetype.startsWith('image/')) {
     cb(null, true);
   } else {
-    console.error('Multer rejected file type:', file.mimetype);
+    if (!isProd) console.error('Multer rejected file type:', file.mimetype);
     cb(new Error('Only image files are allowed'), false);
   }
 };
 
-// Create multer instance
 const upload = multer({
-  storage: storage,
-  fileFilter: fileFilter,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
-  }
+  storage,
+  fileFilter,
+  limits: { fileSize: MAX_FILE_SIZE_BYTES }
 });
 
-// Single file upload middleware
-export const uploadSingle = (fieldName) => {
-  return upload.single(fieldName);
-};
-
-// Multiple files upload middleware
-export const uploadMultiple = (fieldName, maxCount = 5) => {
-  return upload.array(fieldName, maxCount);
-};
+export const uploadSingle = (fieldName) => upload.single(fieldName);
+export const uploadMultiple = (fieldName, maxCount = 5) => upload.array(fieldName, maxCount);
 
 export default upload;
