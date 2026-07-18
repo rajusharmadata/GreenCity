@@ -36,12 +36,16 @@ export const register = async (userData) => {
     ? username.trim().toLowerCase()
     : normalizedEmail;
 
+  console.time('register:lookupEmail');
   const existingEmailUser = await User.findOne({ email: normalizedEmail });
+  console.timeEnd('register:lookupEmail');
   if (existingEmailUser) {
     throw new ApiError(400, 'User already exists with this email');
   }
 
+  console.time('register:lookupUsername');
   const existingUsernameUser = await User.findOne({ username: normalizedUsername });
+  console.timeEnd('register:lookupUsername');
   if (existingUsernameUser) {
     throw new ApiError(400, 'User already exists with this username');
   }
@@ -60,7 +64,9 @@ export const register = async (userData) => {
     isEmailVerified: false
   });
 
+  console.time('register:userSave');
   await user.save();
+  console.timeEnd('register:userSave');
 
   // Fire-and-forget: the client only needs confirmation the account was
   // created, not confirmation the email left the building. Awaiting this
