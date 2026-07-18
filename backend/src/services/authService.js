@@ -29,6 +29,7 @@ export const register = async (userData) => {
   }
 
   const normalizedEmail = email.trim().toLowerCase();
+
   // Your Mongo collection has a unique index on `username`; default it to email
   // to avoid inserting `username: null` (E11000 duplicate key).
   const normalizedUsername = (username && username.trim().length > 0)
@@ -61,11 +62,13 @@ export const register = async (userData) => {
 
   await user.save();
 
-  try {
-    await sendOTPEmail(email, otp, name);
-  } catch (error) {
+  // Fire-and-forget: the client only needs confirmation the account was
+  // created, not confirmation the email left the building. Awaiting this
+  // ties the HTTP response to SMTP latency, which is exactly what was
+  // causing ERR_NETWORK on the client when the mail provider was slow.
+  sendOTPEmail(email, otp, name).catch((error) => {
     console.error('Email sending failed in service:', error);
-  }
+  });
 
   return { user, otp };
 };
@@ -75,28 +78,22 @@ export const login = async (email, password) => {
   if (!user) {
     throw new ApiError(401, 'Invalid credentials');
   }
-
   if (!user.isEmailVerified) {
     throw new ApiError(401, 'Please verify your email before logging in', { requiresVerification: true, email: user.email });
   }
-
   if (!user.password) {
     throw new ApiError(401, 'Invalid credentials');
   }
-
   const isPasswordValid = await user.comparePassword(password);
   if (!isPasswordValid) {
     throw new ApiError(401, 'Invalid credentials');
   }
-
   const token = generateToken(user._id);
   await User.findByIdAndUpdate(user._id, { lastActive: new Date() });
-
   const resolvedCount = await Issue.countDocuments({
     userId: user._id,
     status: 'Resolved'
   });
-
   return { token, user, resolvedCount };
 };
 
@@ -108,12 +105,10 @@ export const verifyEmail = async (email, otp) => {
     throw new ApiError(400, 'OTP has expired');
   }
   if (user.emailVerificationOTP !== otp) throw new ApiError(400, 'Invalid OTP');
-
   user.isEmailVerified = true;
   user.emailVerificationOTP = null;
   user.emailVerificationOTPExpiry = null;
   await user.save();
-
   const token = generateToken(user._id);
   return { token, user };
 };
@@ -122,22 +117,21 @@ export const resendOtp = async (email) => {
   const user = await User.findOne({ email: email.trim().toLowerCase() });
   if (!user) throw new ApiError(404, 'User not found');
   if (user.isEmailVerified) throw new ApiError(400, 'Email already verified');
-
   const otp = generateOTP();
   const otpExpiry = new Date();
   otpExpiry.setMinutes(otpExpiry.getMinutes() + 10);
-
   user.emailVerificationOTP = otp;
   user.emailVerificationOTPExpiry = otpExpiry;
   await user.save();
 
-  try {
-    await sendOTPEmail(email, otp, user.name);
-  } catch (error) {
-    if (process.env.NODE_ENV === 'production') {
-      throw new ApiError(500, 'Failed to send verification email');
-    }
-  }
+  // Same reasoning as register(): don't block the response on SMTP latency.
+  // resendOtp's production behavior previously threw a 500 if the email
+  // failed — that's now impossible to know synchronously, so we log instead.
+  // If you need the client to know delivery failed, track it via a status
+  // field on the user or a delivery webhook instead of blocking the request.
+  sendOTPEmail(email, otp, user.name).catch((error) => {
+    console.error('Resend OTP email failed:', error);
+  });
 
   return { otp };
 };
@@ -145,7 +139,7 @@ export const resendOtp = async (email) => {
 export const socialAuth = async (googleUser) => {
   const normalizedEmail = googleUser.email.toLowerCase().trim();
   let user = await User.findOne({ email: normalizedEmail });
-  
+
   if (!user) {
     user = new User({
       name: googleUser.name || 'Google User',
