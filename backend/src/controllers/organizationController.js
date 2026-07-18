@@ -1,10 +1,10 @@
-import Organization from '../models/organization.js';
+import Organization from '../models/Organization.js';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import asyncHandler from '../utils/asyncHandler.js';
 import { ApiError } from '../middleware/errorMiddleware.js';
-import { sendOTPEmail } from '../utils/emailService.js';
+import { sendOTPEmail } from '../services/emailService.js';
 
 const OTP_EXPIRY_MINUTES = 10;
 const TOKEN_EXPIRY_HOURS = 24;

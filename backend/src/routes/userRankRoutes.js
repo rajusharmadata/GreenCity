@@ -1,6 +1,6 @@
 // routes/ranking.js
 import express from 'express';
-import { getUserRankings } from '../controllers/userrank.js';
+import { getUserRankings } from '../controllers/userRankController.js';
 
 const router = express.Router();
 

@@ -1,7 +1,7 @@
 import express from 'express';
 import passport from 'passport';
-import { markIssueAsSolved } from '../controllers/issuesolved.js';
-import IssueSolved from '../models/issuesolved.js';
+import { markIssueAsSolved } from '../controllers/issueSolvedController.js';
+import IssueSolved from '../models/IssueSolved.js';
 
 const router = express.Router();
 

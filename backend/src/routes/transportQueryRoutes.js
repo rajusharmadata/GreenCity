@@ -1,5 +1,5 @@
 import express from 'express';
-import { checkTransportAvailability } from '../controllers/TransportQuery.js';
+import { checkTransportAvailability } from '../controllers/transportQueryController.js';
 
 const router = express.Router();
 

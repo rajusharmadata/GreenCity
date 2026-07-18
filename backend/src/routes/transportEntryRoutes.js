@@ -4,7 +4,7 @@ import {
   createTransportEntry,
   getAllAgencyTransports,
   getTransportsByOrganization,
-} from '../controllers/TransportEntry.js';
+} from '../controllers/transportEntryController.js';
 
 router.post('/submit', createTransportEntry);
 router.get('/all', getAllAgencyTransports);

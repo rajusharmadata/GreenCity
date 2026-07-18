@@ -6,7 +6,7 @@ import {
     getOrganizationProfile,
     verifyOrganizationEmail,
     resendOrganizationVerification
-} from '../controllers/organization.js';
+} from '../controllers/organizationController.js';
 
 const router = express.Router();
 

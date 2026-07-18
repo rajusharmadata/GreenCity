@@ -1,7 +1,7 @@
-import Issue from '../models/issue.js';
+import Issue from '../models/Issue.js';
 import User from '../models/User.js';
-import Organization from '../models/organization.js';
-import IssueSolved from '../models/issuesolved.js';
+import Organization from '../models/Organization.js';
+import IssueSolved from '../models/IssueSolved.js';
 
 export const markIssueAsSolved = async (req, res) => {
   try {

@@ -16,22 +16,22 @@ import {
 } from './config/security.js';
 
 // Route imports
-import userRoute from './routes/auth.js';
-import issuesRoute from './routes/issues.js';
-import reportsRoute from './routes/reports.js';
-import leaderboardRoute from './routes/leaderboard.js';
-import ecoRoutesRoute from './routes/routes.js';
-import transportRoute from './routes/transport.js';
-import usersRoute from './routes/users.js';
-import communityRoute from './routes/community.js';
-import organizationRoute from './routes/organization.js';
-import issueSolvedRoute from './routes/issuesolved.js';
-import rankingRoute from './routes/userrank.js';
-import organizationRankRoute from './routes/organizationrank.js';
-import pointsRoute from './routes/points.js';
-import TransportEntryRouter from './routes/TransportEntry.js';
-import TransportQuery from './routes/TransportQuery.js';
-import oauthRoute from './routes/oauth.js';
+import authRoutes from './routes/authRoutes.js';
+import issueRoutes from './routes/issueRoutes.js';
+import reportRoutes from './routes/reportRoutes.js';
+import leaderboardRoutes from './routes/leaderboardRoutes.js';
+import routeRoutes from './routes/routeRoutes.js';
+import transportRoutes from './routes/transportRoutes.js';
+import userRoutes from './routes/userRoutes.js';
+import communityRoutes from './routes/communityRoutes.js';
+import organizationRoutes from './routes/organizationRoutes.js';
+import issueSolvedRoutes from './routes/issueSolvedRoutes.js';
+import userRankRoutes from './routes/userRankRoutes.js';
+import organizationRankRoutes from './routes/organizationRankRoutes.js';
+import pointsRoutes from './routes/pointsRoutes.js';
+import transportEntryRoutes from './routes/transportEntryRoutes.js';
+import transportQueryRoutes from './routes/transportQueryRoutes.js';
+import oauthRoutes from './routes/oauthRoutes.js';
 
 import { errorHandler } from './middleware/errorMiddleware.js';
 
@@ -88,22 +88,22 @@ app.get('/health', (req, res) => {
 });
 
 // API routes
-app.use('/api/auth', authRateLimiter, userRoute);
-app.use('/api/auth', authRateLimiter, oauthRoute);
-app.use('/api/issues', issuesRoute);
-app.use('/api/reports', reportsRoute);
-app.use('/api/leaderboard', leaderboardRoute);
-app.use('/api/routes', ecoRoutesRoute);
-app.use('/api/transport', transportRoute);
-app.use('/api/users', usersRoute);
-app.use('/api/community', communityRoute);
-app.use('/api/points', pointsRoute);
-app.use('/api/organization', organizationRoute);
-app.use('/api/issuesolved', issueSolvedRoute);
-app.use('/api/userrank', rankingRoute);
-app.use('/api/organizationrank', organizationRankRoute);
-app.use('/api/entry', TransportEntryRouter);
-app.use('/api/query', TransportQuery);
+app.use('/api/auth', authRateLimiter, authRoutes);
+app.use('/api/auth', authRateLimiter, oauthRoutes);
+app.use('/api/issues', issueRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/leaderboard', leaderboardRoutes);
+app.use('/api/routes', routeRoutes);
+app.use('/api/transport', transportRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/community', communityRoutes);
+app.use('/api/points', pointsRoutes);
+app.use('/api/organization', organizationRoutes);
+app.use('/api/issuesolved', issueSolvedRoutes);
+app.use('/api/userrank', userRankRoutes);
+app.use('/api/organizationrank', organizationRankRoutes);
+app.use('/api/entry', transportEntryRoutes);
+app.use('/api/query', transportQueryRoutes);
 
 // 404 handler
 app.use((req, res) => {

@@ -1,4 +1,4 @@
-import Organization from '../models/organization.js';
+import Organization from '../models/Organization.js';
 
 export const getOrganizationRanks = async (req, res) => {
   try {

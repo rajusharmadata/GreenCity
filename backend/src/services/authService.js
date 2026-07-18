@@ -1,7 +1,7 @@
 import User from '../models/User.js';
-import Issue from '../models/issue.js';
+import Issue from '../models/Issue.js';
 import jwt from 'jsonwebtoken';
-import { sendOTPEmail } from '../utils/emailService.js';
+import { sendOTPEmail } from '../services/emailService.js';
 import { ApiError } from '../middleware/errorMiddleware.js';
 
 /**
