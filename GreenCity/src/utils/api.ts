@@ -3,9 +3,8 @@ import * as SecureStore from 'expo-secure-store';
 
 const api = axios.create({
   baseURL: "https://greencity-7lnb.onrender.com/api",
-  timeout: 30000,
+  timeout: 60000, // 60 seconds
 });
-
 // Request Interceptor: Attach Token
 api.interceptors.request.use(async (config) => {
   try {
@@ -19,13 +18,16 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Response Interceptor: Handle Global Errors (like 401)
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    console.log("Axios Error:", error.message);
+    console.log("Code:", error.code);
+
     if (error.response?.status === 401) {
-      await SecureStore.deleteItemAsync('token');
+      await SecureStore.deleteItemAsync("token");
     }
+
     return Promise.reject(error);
   }
 );

@@ -7,6 +7,18 @@
     },
     "android": {
       "package": "com.rajukumardata1234.greencity"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-image",
+      "expo-router",
+      "expo-secure-store",
+      "expo-web-browser",
+      "expo-splash-screen",
+      "expo-status-bar"
+    ],
+    "ios": {
+      "bundleIdentifier": "com.rajukumardata1234.greencity"
     }
   }
 }
