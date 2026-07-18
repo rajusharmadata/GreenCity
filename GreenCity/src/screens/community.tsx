@@ -156,7 +156,7 @@ export default function CommunityScreen() {
           <View style={styles.lbHeader}>
             <View>
               <Text style={styles.lbTitle}>🏆 Top Leaders</Text>
-              <Text style={styles.lbSub}>This week's eco champions</Text>
+              <Text style={styles.lbSub}>{"This week's eco champions"}</Text>
             </View>
             <TouchableOpacity style={styles.lbSeeAll} onPress={() => router.push('/leaderboard')}>
               <Text style={styles.lbSeeAllText}>See All</Text>

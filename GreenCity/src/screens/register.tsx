@@ -28,6 +28,7 @@ export default function RegisterScreen() {
         email: email.trim().toLowerCase(),
         password,
       });
+      console.log("response : ",response)
       const emailForVerify = (response.data?.data?.user?.email || email.trim()).toString();
 
       router.push({

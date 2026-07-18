@@ -1,4 +1,4 @@
-import Issue from '../models/issue.js';
+import Issue from '../models/Issue.js';
 import User from '../models/User.js';
 import cloudinary from '../config/cloudinary.js';
 import fs from 'fs/promises';

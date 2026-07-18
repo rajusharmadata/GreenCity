@@ -105,7 +105,7 @@ export default function VerifyEmailScreen() {
           <Text style={styles.resendTextLoading}>Sending new code...</Text>
         ) : (
           <Text style={styles.resendText}>
-            Didn't get the code? <Text style={styles.resendTextBold}>Resend</Text>
+            {"Didn't get the code? "}<Text style={styles.resendTextBold}>Resend</Text>
           </Text>
         )}
       </TouchableOpacity>

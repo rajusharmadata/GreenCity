@@ -5,7 +5,7 @@ import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { Strategy as GitHubStrategy } from 'passport-github2';
 import https from 'https';
 import User from '../models/User.js';
-import Organization from '../models/organization.js';
+import Organization from '../models/Organization.js';
 
 dotenv.config();
 

@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/src/store/authStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PermissionHandler from '@/src/components/PermissionHandler';
+import Toast from 'react-native-toast-message';
+import toastConfig from '@/src/components/ui/Toast';
 
 export default function RootLayout() {
   const { token } = useAuthStore();
@@ -62,6 +64,8 @@ export default function RootLayout() {
           <PermissionHandler onComplete={() => setShowPerms(false)} />
         </View>
       )}
+      
+      <Toast config={toastConfig} />
     </View>
   );
 }

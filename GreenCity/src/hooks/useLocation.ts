@@ -90,7 +90,6 @@ export function useLocation(): LocationState {
       if (status !== 'granted') return locationRef.current;
       const loc = await Location.getCurrentPositionAsync({
         accuracy: ACCURACY,
-        timeout: 15000,
       });
       return loc;
     } catch (_) {

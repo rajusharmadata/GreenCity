@@ -1,17 +1,10 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
-const getBaseURL = () => {
-  if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
-
-  // Manually verified IP for this environment
-return `http://10.126.95.164:8080/api`;
-};
 
 const api = axios.create({
-  baseURL: getBaseURL(),
-  timeout: 30000,
+  baseURL: "https://greencity-7lnb.onrender.com/api",
+  timeout: 60000, // 60 seconds
 });
-
 // Request Interceptor: Attach Token
 api.interceptors.request.use(async (config) => {
   try {
@@ -25,13 +18,16 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Response Interceptor: Handle Global Errors (like 401)
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    console.log("Axios Error:", error.message);
+    console.log("Code:", error.code);
+
     if (error.response?.status === 401) {
-      await SecureStore.deleteItemAsync('token');
+      await SecureStore.deleteItemAsync("token");
     }
+
     return Promise.reject(error);
   }
 );
