@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "45cf0c81-801a-4f90-99e7-5c87eff7a1af"
+      }
+    },
+    "android": {
+      "package": "com.rajukumardata1234.greencity"
+    }
+  }
+}

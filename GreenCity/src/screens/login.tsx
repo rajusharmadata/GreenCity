@@ -78,7 +78,7 @@ export default function LoginScreen() {
         activeOpacity={0.7}
       >
         <Text style={styles.signupText}>
-          Don't have an account? <Text style={styles.signupTextBold}>Sign up</Text>
+          {"Don't have an account? "}<Text style={styles.signupTextBold}>Sign up</Text>
         </Text>
       </TouchableOpacity>
     </AuthContainer>

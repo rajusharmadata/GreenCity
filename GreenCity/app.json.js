@@ -10,9 +10,11 @@ export default {
     scheme: "greencity",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
+
     ios: {
       supportsTablet: true,
     },
+
     android: {
       adaptiveIcon: {
         backgroundColor: "#E6F4FE",
@@ -32,10 +34,12 @@ export default {
       ],
       package: "com.rajusharmadata.greencity",
     },
+
     web: {
       output: "static",
       favicon: "./assets/images/favicon.png",
     },
+
     plugins: [
       "expo-router",
       [
@@ -61,16 +65,20 @@ export default {
       ],
       "expo-secure-store",
     ],
+
     experiments: {
       typedRoutes: true,
       reactCompiler: true,
     },
+
     extra: {
       router: {},
       eas: {
-        projectId: "d72eaaba-5978-4297-b341-3503bde5b95e",
+        projectId: "45cf0c81-801a-4f90-99e7-5c87eff7a1af",
       },
       apiUrl: process.env.EXPO_PUBLIC_API_URL,
     },
+
+    owner: "rajukumardata1234",
   },
 };

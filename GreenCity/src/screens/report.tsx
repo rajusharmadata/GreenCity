@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
   photoContainer: { borderRadius: 32, overflow: 'hidden', marginBottom: 20, position: 'relative', height: 300, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 15, elevation: 8 },
   photo: { width: '100%', height: '100%' },
   photoOverlay: { ...StyleSheet.absoluteFillObject },
-  overlayClose: { position: 'absolute', top: 16, right: 16, backgroundColor: 'rgba(0,0,0,0.5)', width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(5px)' },
+  overlayClose: { position: 'absolute', top: 16, right: 16, backgroundColor: 'rgba(0,0,0,0.5)', width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   retakeBtn: { position: 'absolute', bottom: 16, left: 16, flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 16, gap: 6 },
   retakeBtnText: { color: colors.primary, fontWeight: '800', fontSize: 14 },
   submitBtn: { borderRadius: 24, overflow: 'hidden', marginBottom: 30, shadowColor: colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 6 },

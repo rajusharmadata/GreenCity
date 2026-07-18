@@ -1,14 +1,8 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
-const getBaseURL = () => {
-  if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
-
-  // Manually verified IP for this environment
-return `http://10.126.95.164:8080/api`;
-};
 
 const api = axios.create({
-  baseURL: getBaseURL(),
+  baseURL: "https://greencity-7lnb.onrender.com/api",
   timeout: 30000,
 });
 
