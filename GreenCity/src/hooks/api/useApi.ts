@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
-import { API_BASE_URL } from '../../constants/app';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL, STORAGE_KEYS } from '../../constants/app';
 import { showSuccessToast, showErrorToast } from '../../components/ui/Toast';
 import { parseApiError, getUserFriendlyMessage, isAuthError, logError, AppError } from '../../utils/errorHandler';
 
@@ -25,7 +26,7 @@ export const useApi = () => {
       setError(null);
 
       try {
-        const token = localStorage.getItem('token');
+        const token = await AsyncStorage.getItem(STORAGE_KEYS.TOKEN);
         const headers: Record<string, string> = {
           'Content-Type': 'application/json',
           ...(options.headers as Record<string, string>),

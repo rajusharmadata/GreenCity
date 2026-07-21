@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   heroCard: { margin: 20, height: 280, borderRadius: 36, overflow: 'hidden', backgroundColor: 'white', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 15, elevation: 8 },
   image: { width: '100%', height: '100%' },
-  imageOverlay: { ...StyleSheet.absoluteFillObject },
+  imageOverlay: { ...StyleSheet.absoluteFill },
   imagePlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9' },
   placeholderText: { marginTop: 12, color: colors.textLight, fontWeight: '700', fontSize: 14 },
   floatingSeverity: { position: 'absolute', top: 20, right: 20, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5 },

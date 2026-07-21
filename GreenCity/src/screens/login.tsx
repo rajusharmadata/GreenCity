@@ -1,41 +1,39 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import api from '../utils/api';
-import * as SecureStore from 'expo-secure-store';
+import { useApi } from '../hooks/api/useApi';
 import { useAuthStore } from '../store/authStore';
 import { AuthContainer } from '../components/auth/AuthContainer';
 import { AuthInput } from '../components/auth/AuthInput';
 import { ButtonWithLoader } from '../components/auth/ButtonWithLoader';
 import { Colors, Spacing, FontSizes, FontWeights } from '../styles/theme';
+import { showErrorToast, showSuccessToast } from '../components/ui/Toast';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { post } = useApi();
   const setUser = useAuthStore((state) => state.setUser);
 
   const handleLogin = async () => {
     if (!email?.trim() || !password) {
-      return alert('Please fill all fields');
+      showErrorToast('Please fill all fields');
+      return;
     }
     setLoading(true);
     try {
-      const response = await api.post('/auth/login', { email: email.trim(), password });
-      const { user, token } = response.data.data;
-      await SecureStore.setItemAsync('token', token);
-      setUser(user, token);
-
-      router.replace('/(tabs)');
-    } catch (error: any) {
-      const msg =
-        error.response?.data?.error ||
-        error.response?.data?.message ||
-        (error.message === 'Network Error'
-          ? "Cannot reach server. Check that the backend is running and you're on the same network."
-          : 'Login failed');
-      alert(msg);
+      const response = await post('/auth/login', { email: email.trim(), password }, { showToast: false });
+      if (response?.data) {
+        const { user, token } = response.data;
+        await setUser(user, token);
+        showSuccessToast('Login successful!');
+        router.replace('/(tabs)');
+      }
+    } catch (error) {
+      // Error is already handled by useApi hook
+      console.error('Login error:', error);
     } finally {
       setLoading(false);
     }

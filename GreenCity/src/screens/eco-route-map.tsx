@@ -10,6 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import { useEcoRouteStore } from '../store/ecoRouteStore';
 
+import { styles } from '../styles/eco-route-map';
+
 const MODES = [
   { id: 'walk', icon: 'walk', label: 'Walk', pts: 20 },
   { id: 'cycle', icon: 'bicycle', label: 'Cycle', pts: 15 },
@@ -33,6 +35,7 @@ export default function EcoRouteMapScreen() {
   const { activeJourney, setActiveJourney } = useEcoRouteStore();
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [youAreHereAddress, setYouAreHereAddress] = useState('');
+  const [locationError, setLocationError] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
   const mapRef = useRef<MapView>(null);
   const locationSubRef = useRef<Location.LocationSubscription | null>(null);
@@ -47,11 +50,30 @@ export default function EcoRouteMapScreen() {
 
   useEffect(() => {
     if (!activeJourney) return;
+    let mounted = true;
+
     Location.watchPositionAsync(
       { accuracy: Location.Accuracy.Balanced, distanceInterval: 15, timeInterval: 3000 },
-      (loc) => setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude })
-    ).then((sub) => { locationSubRef.current = sub; });
+      (loc) => {
+        if (mounted) setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+      }
+    )
+      .then((sub) => {
+        if (mounted) {
+          locationSubRef.current = sub;
+        } else {
+          sub.remove();
+        }
+      })
+      .catch((e) => {
+        if (mounted) setLocationError('Lost GPS tracking. Directions may be out of date.');
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('[EcoRouteMap] watchPosition error:', e);
+        }
+      });
+
     return () => {
+      mounted = false;
       locationSubRef.current?.remove();
       locationSubRef.current = null;
     };
@@ -59,12 +81,19 @@ export default function EcoRouteMapScreen() {
 
   useEffect(() => {
     if (!userLocation || !activeJourney) return;
-    Location.reverseGeocodeAsync(userLocation).then((rev) => {
-      if (rev[0]) {
+    let mounted = true;
+    Location.reverseGeocodeAsync(userLocation)
+      .then((rev) => {
+        if (!mounted || !rev[0]) return;
         const a = rev[0];
         setYouAreHereAddress([a.streetNumber, a.street, a.city].filter(Boolean).join(', ') || 'Your location');
-      }
-    });
+      })
+      .catch(() => {
+        // Non-critical — keep showing the last known address.
+      });
+    return () => {
+      mounted = false;
+    };
   }, [userLocation?.latitude, userLocation?.longitude]);
 
   const distanceLeftKm = activeJourney && userLocation
@@ -77,7 +106,6 @@ export default function EcoRouteMapScreen() {
   const handleEndJourney = () => {
     if (!activeJourney) return;
     setCompleting(true);
-    const pts = MODES.find(m => m.id === activeJourney.route.mode)?.pts ?? 0;
     setActiveJourney(null);
     router.back();
     setCompleting(false);
@@ -141,7 +169,7 @@ export default function EcoRouteMapScreen() {
       <StatusBar barStyle="dark-content" />
       <MapView
         ref={mapRef}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
         initialRegion={regionForMap}
         showsUserLocation
         followsUserLocation
@@ -178,6 +206,12 @@ export default function EcoRouteMapScreen() {
 
       {/* Directions card (Google Maps style) */}
       <View style={styles.directionsCard}>
+        {locationError && (
+          <View style={styles.locationWarning}>
+            <Ionicons name="warning" size={14} color="#b45309" />
+            <Text style={styles.locationWarningText}>{locationError}</Text>
+          </View>
+        )}
         <View style={styles.directionStep}>
           <View style={styles.stepIcon}>
             <Ionicons name="navigate" size={20} color="#16a34a" />
@@ -233,79 +267,3 @@ export default function EcoRouteMapScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f0fdf4' },
-  topBar: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 52 : 44,
-    left: 12,
-    right: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'white',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  topBarCenter: { flex: 1 },
-  topBarTitle: { fontSize: 11, fontWeight: '700', color: '#6b7280', textTransform: 'uppercase', letterSpacing: 0.5 },
-  topBarSubtitle: { fontSize: 16, fontWeight: '800', color: '#111827', marginTop: 2 },
-  topBarRight: { width: 44 },
-  directionsCard: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'white',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    paddingBottom: 36,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  directionStep: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  stepIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#dcfce7', alignItems: 'center', justifyContent: 'center' },
-  stepContent: { flex: 1 },
-  stepTitle: { fontSize: 10, fontWeight: '800', color: '#94a3b8', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 2 },
-  stepAddress: { fontSize: 14, fontWeight: '600', color: '#111827' },
-  directionLine: { width: 2, height: 16, backgroundColor: '#e5e7eb', marginLeft: 19, marginVertical: 4 },
-  directionStats: { flexDirection: 'row', justifyContent: 'space-around', marginVertical: 16, paddingVertical: 12, backgroundColor: '#f0fdf4', borderRadius: 16 },
-  statBox: { alignItems: 'center', gap: 2 },
-  statValue: { fontSize: 16, fontWeight: '900', color: '#16a34a' },
-  statLabel: { fontSize: 11, fontWeight: '600', color: '#6b7280' },
-  openMapsBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: '#f0fdf4',
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#16a34a',
-    marginBottom: 10,
-  },
-  openMapsBtnText: { fontSize: 15, fontWeight: '800', color: '#16a34a' },
-  endBtn: { backgroundColor: '#16a34a', padding: 16, borderRadius: 16, alignItems: 'center' },
-  endBtnText: { color: 'white', fontSize: 16, fontWeight: '900' },
-  webPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, gap: 16 },
-  webTitle: { fontSize: 20, fontWeight: '900', color: '#111827', textAlign: 'center' },
-  webDesc: { fontSize: 14, color: '#6b7280' },
-});

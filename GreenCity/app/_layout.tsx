@@ -6,19 +6,34 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import PermissionHandler from '@/src/components/PermissionHandler';
 import Toast from 'react-native-toast-message';
 import toastConfig from '@/src/components/ui/Toast';
+import * as SplashScreen from 'expo-splash-screen';
+
+SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const { token } = useAuthStore();
+  const { token, initializeAuth } = useAuthStore();
   const [showPerms, setShowPerms] = useState<boolean | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const granted = await AsyncStorage.getItem('permissions_granted');
-      setShowPerms(!granted);
+      try {
+        // Initialize auth state from storage
+        await initializeAuth();
+        
+        // Check permissions
+        const granted = await AsyncStorage.getItem('permissions_granted');
+        setShowPerms(!granted);
+      } catch (error) {
+        console.error('Error initializing app:', error);
+      } finally {
+        setIsReady(true);
+        await SplashScreen.hideAsync();
+      }
     })();
-  }, []);
+  }, [initializeAuth]);
 
-  if (showPerms === null) return null;
+  if (!isReady || showPerms === null) return null;
 
   return (
     <View style={{ flex: 1 }}>

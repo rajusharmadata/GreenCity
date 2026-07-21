@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  StyleSheet,
   Platform,
   Alert,
 } from 'react-native';
@@ -17,6 +16,9 @@ import MapView, { Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { findRoutes as findRoutesApi, completeRoute as completeRouteApi } from '../services/routeService';
 import { useEcoRouteStore } from '../store/ecoRouteStore';
+import { ecoRoutesStyles as styles } from '../styles/ecoRoutesStyle';
+
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
 const ROUTE_COLORS: Record<string, string> = {
   walk: '#16a34a',
@@ -25,7 +27,7 @@ const ROUTE_COLORS: Record<string, string> = {
   drive: '#ef4444',
 };
 
-const MODE_ICONS: Record<string, string> = {
+const MODE_ICONS: Record<string, IoniconName> = {
   walk: 'walk',
   cycle: 'bicycle',
   transit: 'bus',
@@ -72,6 +74,7 @@ export default function EcoRoutesScreen() {
   const locationRef = useRef<{ latitude: number; longitude: number } | null>(null);
 
   const [userRegion, setUserRegion] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
   const [destination, setDestination] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedMode, setSelectedMode] = useState<string>('walk');
@@ -83,13 +86,18 @@ export default function EcoRoutesScreen() {
   const watchSubRef = useRef<Location.LocationSubscription | null>(null);
 
   const fromCoords = userRegion ?? locationRef.current;
+  const fromCoordsRef = useRef(fromCoords);
+  fromCoordsRef.current = fromCoords;
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') return;
+        if (status !== 'granted') {
+          if (mounted) setLocationError('Location permission is required to find eco routes.');
+          return;
+        }
         const loc = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.BestForNavigation,
         });
@@ -106,6 +114,7 @@ export default function EcoRoutesScreen() {
         );
         watchSubRef.current = sub;
       } catch (e) {
+        if (mounted) setLocationError('Could not get your location. Check GPS and try again.');
         if (process.env.NODE_ENV !== 'production') {
           console.error('[EcoRoutes] location error:', e);
         }
@@ -118,12 +127,14 @@ export default function EcoRoutesScreen() {
     };
   }, []);
 
+  // Only re-fits when a new route/destination arrives, not on every GPS tick —
+  // otherwise live location updates would keep fighting the user's map gestures.
   const fitMapToRoute = useCallback(() => {
-    if (!mapRef.current || !fromCoords) return;
-    const allCoords = [fromCoords];
+    const origin = fromCoordsRef.current;
+    if (!mapRef.current || !origin) return;
+    const allCoords = [origin];
     routes.forEach((r) => {
-      const pts = getPolylineCoords(r);
-      allCoords.push(...pts);
+      allCoords.push(...getPolylineCoords(r));
     });
     if (destinationCoords) allCoords.push(destinationCoords);
     if (allCoords.length < 2) return;
@@ -131,7 +142,7 @@ export default function EcoRoutesScreen() {
       edgePadding: { top: 120, right: 24, bottom: 280, left: 24 },
       animated: true,
     });
-  }, [fromCoords, routes, destinationCoords]);
+  }, [routes, destinationCoords]);
 
   useEffect(() => {
     if (routes.length > 0 && destinationCoords) fitMapToRoute();
@@ -144,7 +155,7 @@ export default function EcoRoutesScreen() {
       return;
     }
     if (!fromCoords) {
-      Alert.alert('Location needed', 'Waiting for your location.');
+      Alert.alert('Location needed', locationError || 'Waiting for your location.');
       return;
     }
     setRouteError(null);
@@ -247,7 +258,7 @@ export default function EcoRoutesScreen() {
     <View style={styles.container}>
       <MapView
         ref={mapRef}
-        style={StyleSheet.absoluteFillObject}
+        style={{ flex: 1 }}
         provider={PROVIDER_GOOGLE}
         initialRegion={initialRegion}
         showsUserLocation
@@ -280,8 +291,10 @@ export default function EcoRoutesScreen() {
       {/* Floating search card */}
       <View style={[styles.searchCard, { paddingTop: insets.top + 8 }]}>
         <View style={styles.searchRow}>
-          <Ionicons name="location-sharp" size={18} color="#16a34a" />
-          <Text style={styles.searchLabel}>My Location (GPS)</Text>
+          <Ionicons name="location-sharp" size={18} color={locationError ? '#ef4444' : '#16a34a'} />
+          <Text style={styles.searchLabel}>
+            {locationError ?? 'My Location (GPS)'}
+          </Text>
         </View>
         <View style={styles.searchRow}>
           <Ionicons name="navigate" size={18} color="#94a3b8" />
@@ -296,7 +309,13 @@ export default function EcoRoutesScreen() {
           />
           {destination.length > 0 && (
             <TouchableOpacity
-              onPress={() => { setDestination(''); setRoutes([]); setRouteError(null); setDestinationCoords(null); }}
+              onPress={() => {
+                setDestination('');
+                setRoutes([]);
+                setRouteError(null);
+                setDestinationCoords(null);
+                setDestinationLabel('');
+              }}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Ionicons name="close-circle" size={20} color="#94a3b8" />
@@ -352,7 +371,7 @@ export default function EcoRoutesScreen() {
                     activeOpacity={0.9}
                   >
                     <View style={[styles.routeCardIcon, { backgroundColor: `${color}20` }]}>
-                      <Ionicons name={icon as any} size={24} color={color} />
+                      <Ionicons name={icon} size={24} color={color} />
                     </View>
                     <Text style={styles.routeCardMode}>{label}</Text>
                     <Text style={styles.routeCardDuration}>{r.durationMin} min</Text>
@@ -385,7 +404,7 @@ export default function EcoRoutesScreen() {
 
       {/* Error banner */}
       {routeError ? (
-        <View style={[styles.errorBanner, { bottom: (insets.bottom || 16) + 180 }]}>
+        <View style={[styles.errorBanner, { bottom: (insets.bottom || 16) + 236 }]}>
           <Ionicons name="warning" size={18} color="#b45309" />
           <Text style={styles.errorBannerText}>{routeError}</Text>
         </View>
@@ -393,111 +412,3 @@ export default function EcoRoutesScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  webPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  webTitle: { fontSize: 16, color: '#6b7280' },
-  searchCard: {
-    position: 'absolute',
-    top: 0,
-    left: 16,
-    right: 16,
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 14,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
-  searchLabel: { fontSize: 14, fontWeight: '700', color: '#111827', flex: 1 },
-  searchInput: { flex: 1, fontSize: 16, color: '#111827', paddingVertical: 4 },
-  searchSubmit: {
-    position: 'absolute',
-    right: 14,
-    top: 14,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#16a34a',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  myLocationBtn: {
-    position: 'absolute',
-    right: 16,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'white',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  bottomSheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'white',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    elevation: 8,
-    maxHeight: 220,
-  },
-  sheetLoading: { alignItems: 'center', paddingVertical: 24, gap: 12 },
-  sheetLoadingText: { fontSize: 14, color: '#6b7280', fontWeight: '600' },
-  cardsScroll: { paddingHorizontal: 16, gap: 12, flexDirection: 'row', paddingBottom: 12 },
-  routeCard: {
-    width: 160,
-    backgroundColor: '#f8fafc',
-    borderRadius: 16,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  routeCardIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  routeCardMode: { fontSize: 15, fontWeight: '800', color: '#111827' },
-  routeCardDuration: { fontSize: 18, fontWeight: '900', color: '#16a34a', marginTop: 2 },
-  routeCardDistance: { fontSize: 12, color: '#6b7280', marginTop: 2 },
-  ecoBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginTop: 6 },
-  ecoBadgeText: { fontSize: 11, fontWeight: '800' },
-  co2Text: { fontSize: 11, color: '#6b7280', marginTop: 4 },
-  ptsChip: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  ptsChipText: { fontSize: 11, fontWeight: '800', color: '#b45309' },
-  startJourneyBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#16a34a',
-    marginHorizontal: 16,
-    padding: 16,
-    borderRadius: 16,
-  },
-  startJourneyBtnText: { color: 'white', fontSize: 16, fontWeight: '900' },
-  sheetHint: { textAlign: 'center', color: '#94a3b8', fontSize: 14, paddingVertical: 24 },
-  errorBanner: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#fef9c3',
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#fde047',
-  },
-  errorBannerText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#92400e' },
-});

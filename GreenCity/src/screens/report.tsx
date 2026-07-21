@@ -10,8 +10,9 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useLocation } from '../hooks/useLocation';
 import { useCamera } from '../hooks/useCamera';
 import { usePoints } from '../hooks/usePoints';
-import { submitReport, fetchMyReports as fetchMyReportsApi } from '../services/reportService';
+import { useApi } from '../hooks/api/useApi';
 import { colors } from '../theme';
+import { showErrorToast, showSuccessToast } from '../components/ui/Toast';
 
 const STATUS_COLOR: Record<string, { bg: string; text: string }> = {
   Pending: colors.status.Pending,
@@ -25,6 +26,7 @@ export default function ReportScreen() {
   const { location, address, refresh: refreshLocation, getCurrentForSubmit, getAddressForCoords } = useLocation();
   const { showCamera, photo, openCamera, closeCamera, onCapture, clearPhoto } = useCamera();
   const { updatePoints } = usePoints();
+  const { post, get } = useApi();
   const [loading, setLoading] = useState(false);
   const [aiResult, setAiResult] = useState<any>(null);
   const [myReports, setMyReports] = useState<any[]>([]);
@@ -33,8 +35,8 @@ export default function ReportScreen() {
 
   const fetchMyReports = useCallback(async () => {
     try {
-      const data = await fetchMyReportsApi();
-      setMyReports(data.reports || []);
+      const data = await get('/issues', { showToast: false });
+      setMyReports(data?.data?.data?.issues || []);
     } catch (e) {
       if (process.env.NODE_ENV !== 'production') {
         console.error('[Report] fetch my reports error:', e);
@@ -43,34 +45,38 @@ export default function ReportScreen() {
       setReportsLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [get]);
 
   useFocusEffect(useCallback(() => { fetchMyReports(); }, []));
 
   const onRefresh = () => { setRefreshing(true); fetchMyReports(); };
 
   const handleSubmit = async () => {
-    if (!photo) { Alert.alert('Required', 'Photo is required.'); return; }
+    if (!photo) { showErrorToast('Photo is required.'); return; }
     setLoading(true);
     try {
       const exactLoc = await getCurrentForSubmit();
       if (!exactLoc) {
-        Alert.alert('Location required', 'Please enable location so authorities can find and fix this issue.');
+        showErrorToast('Location required. Please enable location so authorities can find and fix this issue.');
         setLoading(false);
         return;
       }
       const resolvedAddress = await getAddressForCoords(exactLoc.coords.latitude, exactLoc.coords.longitude) || address || 'Resolving...';
-      const response = await submitReport({
+      const response = await post('/issues', {
         imageUri: photo,
         lat: exactLoc.coords.latitude,
         lng: exactLoc.coords.longitude,
         address: resolvedAddress,
-      });
-      setAiResult(response);
-      if (response.totalPoints != null) updatePoints(response.totalPoints);
+      }, { showToast: false });
+      
+      setAiResult(response?.data);
+      if (response?.data?.data?.pointsEarned != null) {
+        updatePoints(response.data.data.pointsEarned);
+      }
+      showSuccessToast('Report submitted successfully!');
       fetchMyReports();
-    } catch (e: any) {
-      Alert.alert('Error', e.response?.data?.error ?? e.message ?? 'Report submission failed');
+    } catch (e) {
+      console.error('Report submission error:', e);
     } finally {
       setLoading(false);
     }
@@ -312,7 +318,7 @@ const styles = StyleSheet.create({
   cameraSubtitle: { fontSize: 14, color: colors.primary, fontWeight: '600', marginTop: 4, opacity: 0.8 },
   photoContainer: { borderRadius: 32, overflow: 'hidden', marginBottom: 20, position: 'relative', height: 300, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 15, elevation: 8 },
   photo: { width: '100%', height: '100%' },
-  photoOverlay: { ...StyleSheet.absoluteFillObject },
+  photoOverlay: { ...StyleSheet.absoluteFill },
   overlayClose: { position: 'absolute', top: 16, right: 16, backgroundColor: 'rgba(0,0,0,0.5)', width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   retakeBtn: { position: 'absolute', bottom: 16, left: 16, flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 16, gap: 6 },
   retakeBtnText: { color: colors.primary, fontWeight: '800', fontSize: 14 },

@@ -2,7 +2,7 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
 const api = axios.create({
-  baseURL: "https://greencity-7lnb.onrender.com/api",
+  baseURL: "http://172.28.84.164:8080/api",
   timeout: 60000, // 60 seconds
 });
 // Request Interceptor: Attach Token

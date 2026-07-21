@@ -1,4 +1,4 @@
-import { createElement, useEffect } from 'react';
+import { useEffect } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { useAuthStore } from '../../src/store/authStore';
 
@@ -10,14 +10,14 @@ export default function AuthLayout() {
     if (token) {
       router.replace('/(tabs)');
     }
-  }, [token]);
+  }, [token, router]);
 
-  return createElement(
-    Stack,
-    { screenOptions: { headerShown: false } },
-    createElement(Stack.Screen, { name: 'login' }),
-    createElement(Stack.Screen, { name: 'register' }),
-    createElement(Stack.Screen, { name: 'verify-email' })
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="login" />
+      <Stack.Screen name="register" />
+      <Stack.Screen name="verify-email" />
+    </Stack>
   );
 }
 

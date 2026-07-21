@@ -1,4 +1,4 @@
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://greencity-7lnb.onrender.com/api';
+export const API_BASE_URL =  'http://172.28.84.164:8080/api';
 
 export const SCREEN_NAMES = {
   AUTH: {

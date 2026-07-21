@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import api from '../utils/api';
+import { useApi } from '../hooks/api/useApi';
 import { AuthContainer } from '../components/auth/AuthContainer';
 import { AuthInput } from '../components/auth/AuthInput';
 import { ButtonWithLoader } from '../components/auth/ButtonWithLoader';
 import { Colors, Spacing, FontSizes, FontWeights } from '../styles/theme';
+import { showErrorToast, showSuccessToast } from '../components/ui/Toast';
 
 export default function RegisterScreen() {
   const [name, setName] = useState('');
@@ -13,34 +14,35 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { post } = useApi();
 
   const handleRegister = async () => {
     if (!name?.trim() || !email?.trim() || !password) {
-      return alert('Please fill all fields');
+      showErrorToast('Please fill all fields');
+      return;
     }
     if (password.length < 6) {
-      return alert('Password must be at least 6 characters');
+      showErrorToast('Password must be at least 6 characters');
+      return;
     }
     setLoading(true);
     try {
-      const response = await api.post('/auth/register', {
+      const response = await post('/auth/register', {
         name: name.trim(),
         email: email.trim().toLowerCase(),
         password,
-      });
-      console.log("response : ",response)
-      const emailForVerify = (response.data?.data?.user?.email || email.trim()).toString();
-
-      router.push({
-        pathname: '/verify-email',
-        params: { email: emailForVerify },
-      });
-    } catch (error: any) {
-      const msg =
-        error.response?.data?.error ||
-        error.response?.data?.message ||
-        'Registration failed. Check your details and try again.';
-      alert(msg);
+      }, { showToast: false });
+      
+      if (response?.data) {
+        const emailForVerify = (response.data?.user?.email || email.trim()).toString();
+        showSuccessToast('Account created! Please verify your email.');
+        router.push({
+          pathname: '/verify-email',
+          params: { email: emailForVerify },
+        });
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
     } finally {
       setLoading(false);
     }

@@ -6,16 +6,20 @@ import {
   TouchableOpacity,
   Image,
   RefreshControl,
-  Animated,
-  StyleSheet,
+  Animated
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../store/authStore';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import api from '../utils/api';
+import { useApi } from '../hooks/api/useApi';
 import { Colors, Spacing, BorderRadius, FontSizes, FontWeights } from '../styles/theme';
+import { showErrorToast } from '../components/ui/Toast';
+import { StatItem } from '../components/dashboard/StatItem';
+import { ActionCard } from '../components/dashboard/ActionCard';
+import { IssueCardSkeleton } from '../components/dashboard/IssueCardSkeleton';
+import { dashboardStyles } from '../styles/dashboard';
 
 interface Issue {
   _id: string;
@@ -29,28 +33,47 @@ interface Issue {
 export default function DashboardScreen() {
   const router = useRouter();
   const { user, setUser } = useAuthStore();
+  const { get } = useApi();
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   const fetchData = async () => {
     setError(null);
-    try {
-      const [userRes, issuesRes] = await Promise.all([
-        api.get('/auth/me'),
-        api.get('/issues?limit=5'),
-      ]);
+    const [userResult, issuesResult] = await Promise.allSettled([
+      get('/auth/me', { showToast: false }),
+      get('/issues?limit=5', { showToast: false }),
+    ]);
 
-      setUser(userRes.data.data.user, null); // keep existing token
-      setIssues(issuesRes.data.data.issues || []);
-    } catch (err) {
-      console.error('Dashboard fetch error:', err);
-      setError("Couldn't load your dashboard. Pull down to try again.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    if (!isMounted.current) return;
+
+    if (userResult.status === 'fulfilled' && userResult.value?.data?.data?.user) {
+      setUser(userResult.value.data.data.user, null);
     }
+
+    if (issuesResult.status === 'fulfilled' && issuesResult.value?.data?.data?.issues) {
+      setIssues(issuesResult.value.data.data.issues || []);
+    }
+
+    if (userResult.status === 'rejected' && issuesResult.status === 'rejected') {
+      setError("Couldn't load your dashboard. Pull down to try again.");
+    } else if (issuesResult.status === 'rejected') {
+      setError("Couldn't load community activity. Pull down to try again.");
+    } else if (userResult.status === 'rejected') {
+      setError("Couldn't refresh your profile. Pull down to try again.");
+    }
+
+    setLoading(false);
+    setRefreshing(false);
   };
 
   useEffect(() => {
@@ -245,351 +268,4 @@ export default function DashboardScreen() {
   );
 }
 
-function StatItem({ icon, value, label }: { icon: any; value: string; label: string }) {
-  return (
-    <View style={styles.statItem}>
-      <Ionicons name={icon} size={14} color="rgba(255,255,255,0.7)" style={{ marginBottom: 2 }} />
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
-function ActionCard({ icon, title, color, desc, onPress }: any) {
-  return (
-    <TouchableOpacity onPress={onPress} style={styles.actionCard} activeOpacity={0.85}>
-      <LinearGradient
-        colors={[`${color}20`, `${color}05`]}
-        style={StyleSheet.absoluteFillObject}
-      />
-      <View style={[styles.actionCardIcon, { backgroundColor: `${color}15` }]}>
-        <Ionicons name={icon} size={28} color={color} />
-      </View>
-      <Text style={styles.actionCardTitle}>{title}</Text>
-      <Text style={styles.actionCardDesc}>{desc}</Text>
-    </TouchableOpacity>
-  );
-}
-
-function IssueCardSkeleton() {
-  return (
-    <View style={[styles.issueCard, styles.skeletonCard]}>
-      <View style={[styles.issueImage, styles.skeletonBlock]} />
-      <View style={{ flex: 1, marginLeft: Spacing.md, gap: 8 }}>
-        <View style={[styles.skeletonBlock, { height: 14, width: '70%', borderRadius: 6 }]} />
-        <View style={[styles.skeletonBlock, { height: 11, width: '45%', borderRadius: 6 }]} />
-        <View style={[styles.skeletonBlock, { height: 18, width: '35%', borderRadius: 8 }]} />
-      </View>
-    </View>
-  );
-}
-
-const cardShadow = {
-  shadowColor: '#000',
-  shadowOpacity: 0.06,
-  shadowRadius: 10,
-  shadowOffset: { width: 0, height: 3 },
-  elevation: 2,
-};
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.neutral[50],
-  },
-  headerGradient: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.sm,
-    paddingBottom: 64,
-    borderBottomLeftRadius: 40,
-    borderBottomRightRadius: 40,
-  },
-  headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: Spacing.md,
-  },
-  headerWelcome: {
-    fontSize: FontSizes.sm,
-    fontWeight: FontWeights.semibold,
-    color: '#dcfce7',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  headerName: {
-    fontSize: FontSizes['3xl'],
-    fontWeight: FontWeights.bold,
-    color: Colors.neutral[0],
-    marginTop: Spacing.sm,
-  },
-  notificationButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pointsCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    marginTop: Spacing.lg,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.lg,
-    borderRadius: BorderRadius['3xl'],
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  pointsLabel: {
-    fontSize: FontSizes.xs,
-    fontWeight: FontWeights.semibold,
-    color: 'rgba(255, 255, 255, 0.8)',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  pointsValue: {
-    fontSize: FontSizes['4xl'],
-    fontWeight: FontWeights.extrabold,
-    color: Colors.neutral[0],
-    marginTop: Spacing.sm,
-  },
-  pointsIcon: {
-    backgroundColor: '#fbbf24',
-    width: 52,
-    height: 52,
-    borderRadius: BorderRadius['3xl'],
-    alignItems: 'center',
-    justifyContent: 'center',
-    transform: [{ rotate: '8deg' }],
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: Spacing.lg,
-    paddingHorizontal: Spacing.sm,
-  },
-  statItem: { alignItems: 'center', flex: 1 },
-  statDivider: {
-    width: 1,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    marginVertical: 4,
-  },
-  statValue: {
-    fontSize: FontSizes['2xl'],
-    fontWeight: FontWeights.extrabold,
-    color: Colors.neutral[0],
-  },
-  statLabel: {
-    fontSize: FontSizes.xs,
-    fontWeight: FontWeights.semibold,
-    color: '#dcfce7',
-    marginTop: 2,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  contentSection: {
-    paddingHorizontal: Spacing.lg,
-    marginTop: -Spacing['2xl'],
-  },
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#fefce8',
-    borderWidth: 1,
-    borderColor: '#fde68a',
-    borderRadius: BorderRadius.xl,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  errorText: { flex: 1, color: '#78350f', fontSize: FontSizes.xs, fontWeight: FontWeights.semibold },
-  actionCardsRow: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-  },
-  actionCard: {
-    flex: 1,
-    backgroundColor: Colors.neutral[0],
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.lg,
-    borderRadius: BorderRadius['3xl'],
-    alignItems: 'center',
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: Colors.neutral[100],
-    ...cardShadow,
-  },
-  actionCardIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: BorderRadius['3xl'],
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.md,
-  },
-  actionCardTitle: {
-    fontSize: FontSizes.lg,
-    fontWeight: FontWeights.extrabold,
-    color: Colors.neutral[900],
-  },
-  actionCardDesc: {
-    fontSize: FontSizes.xs,
-    fontWeight: FontWeights.semibold,
-    color: Colors.neutral[400],
-    marginTop: 2,
-    textTransform: 'uppercase',
-  },
-  sectionTitle: {
-    fontSize: FontSizes.xl,
-    fontWeight: FontWeights.extrabold,
-    color: Colors.neutral[800],
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.md,
-  },
-  challengeCard: {
-    backgroundColor: Colors.neutral[0],
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.lg,
-    borderRadius: BorderRadius['3xl'],
-    borderWidth: 1,
-    borderColor: Colors.primary[100],
-    ...cardShadow,
-  },
-  challengeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.md,
-  },
-  challengeInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  trophyIcon: {
-    backgroundColor: '#fef3c7',
-    width: 44,
-    height: 44,
-    borderRadius: BorderRadius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  challengeDetails: {
-    marginLeft: Spacing.md,
-    flex: 1,
-  },
-  challengeTitle: {
-    fontSize: FontSizes.base,
-    fontWeight: FontWeights.bold,
-    color: Colors.neutral[900],
-  },
-  challengeSubtitle: {
-    fontSize: FontSizes.xs,
-    fontWeight: FontWeights.normal,
-    color: Colors.neutral[400],
-  },
-  challengePoints: {
-    fontSize: FontSizes.base,
-    fontWeight: FontWeights.bold,
-    color: Colors.primary[500],
-  },
-  progressBarContainer: {
-    height: 8,
-    backgroundColor: Colors.neutral[100],
-    borderRadius: BorderRadius.full,
-    marginTop: Spacing.md,
-    overflow: 'hidden',
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: '#22c55e',
-    borderRadius: BorderRadius.full,
-  },
-  activityHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.md,
-  },
-  seeAllLink: {
-    fontSize: FontSizes.base,
-    fontWeight: FontWeights.bold,
-    color: Colors.primary[500],
-  },
-  emptyStateWrap: {
-    alignItems: 'center',
-    paddingVertical: Spacing.lg,
-    gap: 8,
-  },
-  emptyState: {
-    fontSize: FontSizes.base,
-    fontWeight: FontWeights.normal,
-    color: Colors.neutral[400],
-    textAlign: 'center',
-  },
-  issueCard: {
-    backgroundColor: Colors.neutral[0],
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius['3xl'],
-    marginBottom: Spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.neutral[100],
-    ...cardShadow,
-  },
-  skeletonCard: { shadowOpacity: 0, elevation: 0 },
-  skeletonBlock: { backgroundColor: Colors.neutral[100] },
-  issueImage: {
-    width: 72,
-    height: 72,
-    borderRadius: BorderRadius.xl,
-    backgroundColor: Colors.neutral[100],
-  },
-  issueContent: {
-    flex: 1,
-    marginLeft: Spacing.md,
-  },
-  issueTitle: {
-    fontSize: FontSizes.base,
-    fontWeight: FontWeights.bold,
-    color: Colors.neutral[900],
-  },
-  issueAddress: {
-    fontSize: FontSizes.xs,
-    fontWeight: FontWeights.normal,
-    color: Colors.neutral[400],
-    marginTop: 4,
-  },
-  issueMetaTags: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: Spacing.sm,
-  },
-  statusBadge: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.full,
-  },
-  statusText: {
-    fontSize: 10,
-    fontWeight: FontWeights.extrabold,
-    textTransform: 'uppercase',
-  },
-  categoryTag: {
-    fontSize: 10,
-    fontWeight: FontWeights.bold,
-    color: Colors.neutral[300],
-    marginLeft: Spacing.md,
-    textTransform: 'uppercase',
-  },
-  bottomSpacer: {
-    height: 80,
-  },
-});
+const styles = dashboardStyles;

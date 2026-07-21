@@ -8,15 +8,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter, useFocusEffect } from 'expo-router';
-import api from '../utils/api';
+import { useApi } from '../hooks/api/useApi';
+import { showErrorToast, showSuccessToast } from '../components/ui/Toast';
 
 // Types and Components
 import { Post, LeaderboardEntry } from '../types/community';
 import { CreatePostModal } from '../components/community/CreatePostModal';
 import { CommentModal } from '../components/community/CommentModal';
+import { PostCard } from '../components/community/PostCard';
+
+import { styles } from "../styles/community";
 
 export default function CommunityScreen() {
   const router = useRouter();
+  const { get, post } = useApi();
   
   // State with proper types
   const [posts, setPosts] = useState<Post[]>([]);
@@ -40,11 +45,11 @@ export default function CommunityScreen() {
   const fetchData = async () => {
     try {
       const [postsRes, lbRes] = await Promise.allSettled([
-        api.get('/community/posts'),
-        api.get('/leaderboard?limit=3'),
+        get('/community/posts', { showToast: false }),
+        get('/leaderboard?limit=3', { showToast: false }),
       ]);
-      if (postsRes.status === 'fulfilled') setPosts(postsRes.value.data.posts || []);
-      if (lbRes.status === 'fulfilled') setLeaderboard(lbRes.value.data.leaderboard || []);
+      if (postsRes.status === 'fulfilled') setPosts(postsRes.value?.data?.posts || []);
+      if (lbRes.status === 'fulfilled') setLeaderboard(lbRes.value?.data?.leaderboard || []);
     } catch (e) {
       console.error('community fetch error', e);
     } finally {
@@ -57,8 +62,8 @@ export default function CommunityScreen() {
     setLoading(true);
     setActiveTag(tag);
     try {
-      const res = await api.get(`/community/posts?filter=${tag}`);
-      setPosts(res.data.posts || []);
+      const res = await get(`/community/posts?filter=${tag}`, { showToast: false });
+      setPosts(res?.data?.posts || []);
     } catch (e) {
       console.error('fetch by tag error', e);
     } finally {
@@ -71,8 +76,8 @@ export default function CommunityScreen() {
 
   const handleLike = async (postId: string) => {
     try {
-      const res = await api.post(`/community/posts/${postId}/like`);
-      setPosts(posts.map(p => p._id === postId ? { ...p, likes: res.data.likes } : p));
+      const res = await post(`/community/posts/${postId}/like`, {}, { showToast: false });
+      setPosts(posts.map(p => p._id === postId ? { ...p, likes: res?.data?.likes } : p));
     } catch (e) { console.error('like error', e); }
   };
 
@@ -88,11 +93,11 @@ export default function CommunityScreen() {
   const handleAddComment = async () => {
     if (!commentText.trim() || !activePostForComment) return;
     try {
-      await api.post(`/community/posts/${activePostForComment._id}/comment`, { text: commentText });
+      await post(`/community/posts/${activePostForComment._id}/comment`, { text: commentText }, { showToast: false });
       setCommentText('');
       setCommentModalVisible(false);
       fetchData();
-      Alert.alert('Commented!', 'Your thought is shared.');
+      showSuccessToast('Comment added successfully!');
     } catch (e) { console.error('comment error', e); }
   };
 
@@ -120,14 +125,15 @@ export default function CommunityScreen() {
         // @ts-ignore
         formData.append('image', { uri: selectedImage, name: filename, type });
       }
-      await api.post('/community/posts', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      await post('/community/posts', formData, { showToast: false });
       setModalVisible(false);
       setNewPostText('');
       setSelectedImage(null);
       fetchData();
-      Alert.alert('Posted! 🌿', 'Your green story is live.');
-    } catch (e: any) {
-      Alert.alert('Error', e.response?.data?.error || 'Failed to create post');
+      showSuccessToast('Your green story is live! 🌿');
+    } catch (e) {
+      console.error('create post error', e);
+      showErrorToast('Failed to create post');
     } finally {
       setCreating(false);
     }
@@ -263,106 +269,3 @@ export default function CommunityScreen() {
   );
 }
 
-function PostCard({ post, onLike, onComment, onShare }: { post: Post; onLike: () => void; onComment: () => void; onShare: () => void }) {
-  return (
-    <View style={styles.postCard}>
-      {/* Author */}
-      <View style={styles.postAuthorRow}>
-        <Image
-          source={{ uri: post.userId?.avatar || `https://i.pravatar.cc/150?u=${post.userId?.email || post._id}` }}
-          style={styles.postAvatar}
-        />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.postAuthor}>{post.userId?.name || 'Green Citizen'}</Text>
-          <View style={styles.postMetaRow}>
-            <Text style={styles.postDate}>{new Date(post.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</Text>
-            <View style={styles.postTagDot} />
-            <Text style={styles.postTag}>{post.filterTag || 'post'}</Text>
-          </View>
-        </View>
-        <View style={styles.postTagBubble}>
-          <Ionicons name="leaf" size={12} color="#16a34a" />
-        </View>
-      </View>
-
-      {/* Content */}
-      <Text style={styles.postText}>{post.text}</Text>
-      {post.imageUrl && (
-        <Image source={{ uri: post.imageUrl }} style={styles.postImage} resizeMode="cover" />
-      )}
-
-      {/* Actions */}
-      <View style={styles.postActions}>
-        <TouchableOpacity style={styles.postAction} onPress={onLike}>
-          <View style={[styles.actionBubble, post.likes?.length > 0 && { backgroundColor: '#fee2e2' }]}>
-            <Ionicons name="heart" size={18} color={post.likes?.length > 0 ? '#f43f5e' : '#9ca3af'} />
-          </View>
-          <Text style={[styles.actionCount, post.likes?.length > 0 && { color: '#f43f5e' }]}>
-            {post.likes?.length || 0}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.postAction} onPress={onComment}>
-          <View style={styles.actionBubble}>
-            <Ionicons name="chatbubble-outline" size={18} color="#9ca3af" />
-          </View>
-          <Text style={styles.actionCount}>{post.comments?.length || 0}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.postAction, { marginLeft: 'auto' }]} onPress={onShare}>
-          <View style={styles.actionBubble}>
-            <Ionicons name="share-social-outline" size={18} color="#9ca3af" />
-          </View>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
-  header: { paddingTop: 56, paddingBottom: 20, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerTitle: { color: 'white', fontSize: 28, fontWeight: '900' },
-  headerSub: { color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: '600', marginTop: 3 },
-  headerBtn: { backgroundColor: 'rgba(255,255,255,0.2)', padding: 10, borderRadius: 16 },
-  lbCard: { margin: 16, borderRadius: 28, padding: 20, overflow: 'hidden', position: 'relative' },
-  lbHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  lbTitle: { color: 'white', fontSize: 17, fontWeight: '900' },
-  lbSub: { color: 'rgba(255,255,255,0.5)', fontSize: 11, marginTop: 2 },
-  lbSeeAll: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(34,197,94,0.15)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
-  lbSeeAllText: { color: '#22c55e', fontWeight: '700', fontSize: 12 },
-  lbEmpty: { color: 'rgba(255,255,255,0.4)', textAlign: 'center', paddingVertical: 12 },
-  lbRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)' },
-  lbRank: { fontSize: 22, width: 32, textAlign: 'center' },
-  lbAvatar: { width: 38, height: 38, borderRadius: 12, borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)' },
-  lbName: { color: 'white', fontWeight: '800', fontSize: 13 },
-  lbTier: { color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: '600', marginTop: 1 },
-  lbPts: { color: '#22c55e', fontWeight: '900', fontSize: 14 },
-  feedLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 8, marginTop: 16 },
-  feedLabel: { fontSize: 10, fontWeight: '800', color: '#94a3b8', letterSpacing: 2, textTransform: 'uppercase' },
-  feedCount: { fontSize: 12, fontWeight: '700', color: '#16a34a' },
-  tagsScroll: { paddingHorizontal: 16, marginBottom: 4 },
-  tagsContainer: { gap: 10, paddingRight: 32 },
-  tagItem: { backgroundColor: 'white', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0' },
-  tagItemActive: { backgroundColor: '#16a34a', borderColor: '#16a34a' },
-  tagText: { fontSize: 11, fontWeight: '800', color: '#64748b' },
-  tagTextActive: { color: 'white' },
-  emptyFeed: { alignItems: 'center', paddingVertical: 48, gap: 10 },
-  emptyFeedTitle: { fontSize: 18, fontWeight: '900', color: '#374151' },
-  emptyFeedSub: { color: '#9ca3af', textAlign: 'center', fontSize: 14 },
-  fab: { position: 'absolute', bottom: 28, right: 20, borderRadius: 30, shadowColor: '#16a34a', shadowOpacity: 0.5, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 10 },
-  fabGradient: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
-  postCard: { backgroundColor: 'white', marginHorizontal: 16, marginBottom: 12, borderRadius: 24, padding: 18, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 },
-  postAuthorRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
-  postAvatar: { width: 44, height: 44, borderRadius: 15, backgroundColor: '#f1f5f9' },
-  postAuthor: { fontSize: 14, fontWeight: '900', color: '#111827' },
-  postMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
-  postDate: { fontSize: 11, color: '#9ca3af', fontWeight: '600' },
-  postTagDot: { width: 3, height: 3, borderRadius: 2, backgroundColor: '#cbd5e1' },
-  postTag: { fontSize: 11, color: '#16a34a', fontWeight: '700', textTransform: 'capitalize' },
-  postTagBubble: { backgroundColor: '#f0fdf4', padding: 8, borderRadius: 12 },
-  postText: { fontSize: 15, color: '#374151', lineHeight: 22, marginBottom: 12 },
-  postImage: { width: '100%', height: 200, borderRadius: 18, marginBottom: 12 },
-  postActions: { flexDirection: 'row', alignItems: 'center', gap: 16, borderTopWidth: 1, borderTopColor: '#f8fafc', paddingTop: 12 },
-  postAction: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  actionBubble: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center' },
-  actionCount: { fontSize: 13, fontWeight: '700', color: '#9ca3af' },
-});
