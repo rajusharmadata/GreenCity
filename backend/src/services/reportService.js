@@ -3,8 +3,7 @@ import User from '../models/User.js';
 import cloudinary from '../config/cloudinary.js';
 import fs from 'fs/promises';
 import { analyzeIssueImage } from './aiAnalysis.js';
-import { addPoints } from './pointsService.js';
-
+import { addPoints } from '../features/gamification/controllers/leaderboardController.js';
 const CLOUDINARY_FOLDER = process.env.CLOUDINARY_ISSUE_FOLDER || 'greencity_issues';
 const POINTS_REPORT = 10;
 const POINTS_REASON = 'Issue report (AI)';

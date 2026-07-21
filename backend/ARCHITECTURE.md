@@ -2,7 +2,7 @@
 
 ## Overview
 
-This backend follows enterprise-grade architecture patterns with clear separation of concerns, consistent naming conventions, and scalable structure.
+This backend follows enterprise-grade **feature-based architecture** patterns with clear separation of concerns, consistent naming conventions, and scalable structure. The codebase is organized by business features rather than technical layers, making it easier to maintain and scale.
 
 ## Folder Structure
 
@@ -15,22 +15,75 @@ backend/
 │   │   ├── passport.js
 │   │   └── security.js
 │   │
-│   ├── controllers/      # Request handlers (thin layer)
-│   │   ├── authController.js
-│   │   ├── baseController.js
-│   │   ├── communityController.js
-│   │   ├── issueController.js
-│   │   ├── issueSolvedController.js
-│   │   ├── leaderboardController.js
-│   │   ├── organizationController.js
-│   │   ├── organizationRankController.js
-│   │   ├── pointsController.js
-│   │   ├── reportController.js
-│   │   ├── routeController.js
-│   │   ├── transportController.js
-│   │   ├── transportEntryController.js
-│   │   ├── transportQueryController.js
-│   │   └── userRankController.js
+│   ├── features/        # Feature-based modules
+│   │   ├── auth/        # Authentication & Authorization
+│   │   │   ├── controllers/
+│   │   │   │   └── authController.js
+│   │   │   ├── services/
+│   │   │   │   └── authService.js
+│   │   │   ├── routes/
+│   │   │   │   ├── authRoutes.js
+│   │   │   │   └── oauthRoutes.js
+│   │   │   └── validators/
+│   │   │       └── authValidator.js
+│   │   │
+│   │   ├── issues/      # Issue Reporting & Management
+│   │   │   ├── controllers/
+│   │   │   │   ├── issueController.js
+│   │   │   │   └── issueSolvedController.js
+│   │   │   ├── routes/
+│   │   │   │   ├── issueRoutes.js
+│   │   │   │   └── issueSolvedRoutes.js
+│   │   │   └── validators/
+│   │   │       └── issueValidator.js
+│   │   │
+│   │   ├── transport/   # Transportation & Routes
+│   │   │   ├── controllers/
+│   │   │   │   ├── transportController.js
+│   │   │   │   ├── transportEntryController.js
+│   │   │   │   ├── transportQueryController.js
+│   │   │   │   └── routeController.js
+│   │   │   ├── services/
+│   │   │   │   └── routeService.js
+│   │   │   ├── routes/
+│   │   │   │   ├── transportRoutes.js
+│   │   │   │   ├── transportEntryRoutes.js
+│   │   │   │   ├── transportQueryRoutes.js
+│   │   │   │   └── routeRoutes.js
+│   │   │   └── validators/
+│   │   │       └── transportValidator.js
+│   │   │
+│   │   ├── community/   # Community Features
+│   │   │   ├── controllers/
+│   │   │   │   └── communityController.js
+│   │   │   ├── services/
+│   │   │   │   └── communityService.js
+│   │   │   ├── routes/
+│   │   │   │   └── communityRoutes.js
+│   │   │   └── validators/
+│   │   │       └── communityValidator.js
+│   │   │
+│   │   ├── organizations/ # Organization Management
+│   │   │   ├── controllers/
+│   │   │   │   ├── organizationController.js
+│   │   │   │   └── organizationRankController.js
+│   │   │   ├── routes/
+│   │   │   │   ├── organizationRoutes.js
+│   │   │   │   └── organizationRankRoutes.js
+│   │   │   └── validators/
+│   │   │       └── organizationValidator.js
+│   │   │
+│   │   └── gamification/ # Points, Leaderboards, Rankings
+│   │       ├── controllers/
+│   │       │   ├── leaderboardController.js
+│   │       │   ├── pointsController.js
+│   │       │   └── userRankController.js
+│   │       ├── services/
+│   │       │   └── pointsService.js
+│   │       └── routes/
+│   │           ├── leaderboardRoutes.js
+│   │           ├── pointsRoutes.js
+│   │           └── userRankRoutes.js
 │   │
 │   ├── db/              # Database connection
 │   │   └── db.js
@@ -56,32 +109,14 @@ backend/
 │   │   ├── TransportQuery.js
 │   │   └── User.js
 │   │
-│   ├── routes/          # API routes (camelCase with Routes suffix)
-│   │   ├── authRoutes.js
-│   │   ├── communityRoutes.js
-│   │   ├── issueRoutes.js
-│   │   ├── issueSolvedRoutes.js
-│   │   ├── leaderboardRoutes.js
-│   │   ├── oauthRoutes.js
-│   │   ├── organizationRankRoutes.js
-│   │   ├── organizationRoutes.js
-│   │   ├── pointsRoutes.js
+│   ├── routes/          # Legacy routes (being migrated)
 │   │   ├── reportRoutes.js
-│   │   ├── routeRoutes.js
-│   │   ├── transportEntryRoutes.js
-│   │   ├── transportQueryRoutes.js
-│   │   ├── transportRoutes.js
-│   │   ├── userRankRoutes.js
 │   │   └── userRoutes.js
 │   │
-│   ├── services/        # Business logic layer
+│   ├── services/        # Shared services
 │   │   ├── aiAnalysis.js
-│   │   ├── authService.js
-│   │   ├── communityService.js
 │   │   ├── emailService.js
-│   │   ├── pointsService.js
-│   │   ├── reportService.js
-│   │   └── routeService.js
+│   │   └── reportService.js
 │   │
 │   ├── tests/           # Test files
 │   │   ├── unit/
@@ -94,14 +129,6 @@ backend/
 │   │   ├── logger.js
 │   │   ├── responseFormatter.js
 │   │   └── validation.js
-│   │
-│   ├── validators/      # Request validation schemas
-│   │   ├── authValidator.js
-│   │   ├── communityValidator.js
-│   │   ├── issueValidator.js
-│   │   ├── organizationValidator.js
-│   │   ├── routeValidator.js
-│   │   └── transportValidator.js
 │   │
 │   ├── app.js           # Express app configuration
 │   └── server.js        # Server entry point
@@ -117,7 +144,22 @@ backend/
 
 ## Architecture Principles
 
-### 1. Separation of Concerns
+### 1. Feature-Based Architecture
+
+The codebase is organized by **business features** rather than technical layers. Each feature is self-contained with its own:
+- Controllers (request handlers)
+- Services (business logic)
+- Routes (API endpoints)
+- Validators (request validation)
+
+**Benefits:**
+- Easier to locate and modify feature-specific code
+- Better code organization and maintainability
+- Simplifies feature onboarding and removal
+- Clear boundaries between business domains
+- Scalable team development (feature teams can work independently)
+
+### 2. Separation of Concerns
 
 - **Controllers**: Handle HTTP requests/responses only. Delegate business logic to services.
 - **Services**: Contain business logic. Reusable across different controllers.
@@ -126,8 +168,9 @@ backend/
 - **Validators**: Validate incoming request data before processing.
 - **Middleware**: Cross-cutting concerns (auth, error handling, uploads).
 
-### 2. Naming Conventions
+### 3. Naming Conventions
 
+- **Feature Folders**: lowercase, descriptive (e.g., `auth`, `issues`, `transport`)
 - **Files**: camelCase for routes, controllers, services; PascalCase for models
 - **Routes**: End with `Routes.js` suffix (e.g., `authRoutes.js`)
 - **Controllers**: End with `Controller.js` suffix (e.g., `authController.js`)
@@ -135,20 +178,21 @@ backend/
 - **Services**: camelCase (e.g., `authService.js`)
 - **Validators**: End with `Validator.js` suffix (e.g., `authValidator.js`)
 
-### 3. Layered Architecture
+### 4. Layered Architecture
 
 ```
 Request → Route → Validator → Middleware → Controller → Service → Model → Database
 ```
 
-### 4. Error Handling
+### 5. Error Handling
 
 - Use `ApiError` class for custom errors
 - Centralized error handling in `errorMiddleware.js`
 - Consistent error response format
 - Proper HTTP status codes
+- Standardized error responses across all features
 
-### 5. Response Format
+### 6. Response Format
 
 **Success Response:**
 ```json
@@ -351,14 +395,29 @@ Test structure:
 
 When adding new features:
 
-1. Create model in `models/` (PascalCase)
-2. Create service in `services/` (camelCase)
+1. Create feature folder in `src/features/` (lowercase, descriptive)
+2. Create subfolders: `controllers/`, `services/`, `routes/`, `validators/`
 3. Create controller in `controllers/` (camelCase + Controller suffix)
-4. Create validator in `validators/` (camelCase + Validator suffix)
-5. Create routes in `routes/` (camelCase + Routes suffix)
-6. Update `app.js` to include new routes
-7. Add tests in `tests/`
-8. Update this documentation
+4. Create service in `services/` (camelCase + Service suffix)
+5. Create validator in `validators/` (camelCase + Validator suffix)
+6. Create routes in `routes/` (camelCase + Routes suffix)
+7. Update `app.js` to import and use new feature routes
+8. Add tests in `tests/`
+9. Update this documentation
+
+## Migration Notes
+
+This codebase has been migrated from a layer-based architecture to a feature-based architecture:
+
+- **Old Structure**: Files organized by technical layer (controllers/, services/, routes/)
+- **New Structure**: Files organized by business feature (features/auth/, features/issues/, etc.)
+
+**Benefits of Migration:**
+- Better code organization and discoverability
+- Easier feature development and maintenance
+- Clearer boundaries between business domains
+- Improved scalability for team development
+- Simplified feature onboarding and removal
 
 ## Maintenance
 

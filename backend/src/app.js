@@ -15,23 +15,23 @@ import {
   corsOptions
 } from './config/security.js';
 
-// Route imports
-import authRoutes from './routes/authRoutes.js';
-import issueRoutes from './routes/issueRoutes.js';
+// Route imports - Feature-based architecture
+import authRoutes from './features/auth/routes/authRoutes.js';
+import oauthRoutes from './features/auth/routes/oauthRoutes.js';
+import issueRoutes from './features/issues/routes/issueRoutes.js';
+import issueSolvedRoutes from './features/issues/routes/issueSolvedRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
-import leaderboardRoutes from './routes/leaderboardRoutes.js';
-import routeRoutes from './routes/routeRoutes.js';
-import transportRoutes from './routes/transportRoutes.js';
+import leaderboardRoutes from './features/gamification/routes/leaderboardRoutes.js';
+import routeRoutes from './features/transport/routes/routeRoutes.js';
+import transportRoutes from './features/transport/routes/transportRoutes.js';
+import transportEntryRoutes from './features/transport/routes/transportEntryRoutes.js';
+import transportQueryRoutes from './features/transport/routes/transportQueryRoutes.js';
 import userRoutes from './routes/userRoutes.js';
-import communityRoutes from './routes/communityRoutes.js';
-import organizationRoutes from './routes/organizationRoutes.js';
-import issueSolvedRoutes from './routes/issueSolvedRoutes.js';
-import userRankRoutes from './routes/userRankRoutes.js';
-import organizationRankRoutes from './routes/organizationRankRoutes.js';
-import pointsRoutes from './routes/pointsRoutes.js';
-import transportEntryRoutes from './routes/transportEntryRoutes.js';
-import transportQueryRoutes from './routes/transportQueryRoutes.js';
-import oauthRoutes from './routes/oauthRoutes.js';
+import communityRoutes from './features/community/routes/communityRoutes.js';
+import organizationRoutes from './features/organizations/routes/organizationRoutes.js';
+import organizationRankRoutes from './features/organizations/routes/organizationRankRoutes.js';
+import userRankRoutes from './features/gamification/routes/userRankRoutes.js';
+import pointsRoutes from './features/gamification/routes/pointsRoutes.js';
 
 import { errorHandler } from './middleware/errorMiddleware.js';
 

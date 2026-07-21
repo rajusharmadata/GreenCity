@@ -121,7 +121,6 @@ if (oauthProvidersStatus.google) {
               email,
               firstName: profile.name?.givenName || profile.displayName || email.split('@')[0],
               lastName: profile.name?.familyName || '',
-          username: profile.displayName || email.split('@')[0],
               profilePicture: profile.photos?.[0]?.value,
           role: 'user',
           isEmailVerified: true,
@@ -221,9 +220,8 @@ if (oauthProvidersStatus.github) {
         user = new User({
           githubId: profile.id,
               email,
-              firstName: profile.displayName || profile.username || email.split('@')[0],
+              firstName: profile.displayName  || email.split('@')[0],
           lastName: '',
-              username: profile.username || email.split('@')[0],
               profilePicture: profile.photos?.[0]?.value,
           role: 'user',
           isEmailVerified: true,
